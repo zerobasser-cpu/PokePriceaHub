@@ -20,6 +20,7 @@ const FRANKFURTER_URL =
 const FALLBACK_USD_TO_GBP = 0.74;
 const FALLBACK_EUR_TO_GBP = 0.86;
 
+
 /*
 ============================================================
 PRICE RESULT
@@ -41,25 +42,76 @@ export type PriceResult = {
   average: number | null;
 };
 
+
 /*
 ============================================================
 SAFE NUMBER
 ============================================================
+
+Accepts:
+
+- numbers
+- numeric strings
+
+Rejects:
+
+- null
+- undefined
+- NaN
+- Infinity
+- zero
+- negative values
 */
 
 function safeNumber(
-  value: unknown
+  value: unknown,
 ): number | null {
+
   if (
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    value <= 0
+    typeof value === "number"
   ) {
-    return null;
+
+    if (
+      !Number.isFinite(value) ||
+      value <= 0
+    ) {
+      return null;
+    }
+
+    return value;
   }
 
-  return value;
+
+  if (
+    typeof value === "string"
+  ) {
+
+    const cleaned =
+      value
+        .replace(/[$£€,]/g, "")
+        .trim();
+
+    if (!cleaned) {
+      return null;
+    }
+
+    const parsed =
+      Number(cleaned);
+
+    if (
+      !Number.isFinite(parsed) ||
+      parsed <= 0
+    ) {
+      return null;
+    }
+
+    return parsed;
+  }
+
+
+  return null;
 }
+
 
 /*
 ============================================================
@@ -68,10 +120,14 @@ ROUND PRICE
 */
 
 function roundPrice(
-  value: number
+  value: number,
 ): number {
-  return Math.round(value * 100) / 100;
+
+  return Math.round(
+    value * 100
+  ) / 100;
 }
+
 
 /*
 ============================================================
@@ -80,41 +136,52 @@ USD -> GBP
 */
 
 async function getUsdToGbp(): Promise<number> {
+
   try {
-    const response = await fetch(
-      `${FRANKFURTER_URL}?from=USD&to=GBP`,
-      {
-        next: {
-          revalidate: 3600,
+
+    const response =
+      await fetch(
+        `${FRANKFURTER_URL}?from=USD&to=GBP`,
+        {
+          next: {
+            revalidate: 3600,
+          },
         },
-      }
-    );
+      );
+
 
     if (!response.ok) {
       throw new Error(
-        "USD exchange request failed"
+        "USD exchange request failed",
       );
     }
 
-    const data = await response.json();
 
-    const rate = data?.rates?.GBP;
+    const data =
+      await response.json();
 
-    if (
-      typeof rate !== "number" ||
-      !Number.isFinite(rate) ||
-      rate <= 0
-    ) {
+
+    const rate =
+      safeNumber(
+        data?.rates?.GBP,
+      );
+
+
+    if (rate === null) {
       throw new Error(
-        "Invalid USD exchange rate"
+        "Invalid USD exchange rate",
       );
     }
+
 
     return rate;
+
   } catch {
+
     return FALLBACK_USD_TO_GBP;
   }
 }
+
 
 /*
 ============================================================
@@ -123,57 +190,172 @@ EUR -> GBP
 */
 
 async function getEurToGbp(): Promise<number> {
+
   try {
-    const response = await fetch(
-      `${FRANKFURTER_URL}?from=EUR&to=GBP`,
-      {
-        next: {
-          revalidate: 3600,
+
+    const response =
+      await fetch(
+        `${FRANKFURTER_URL}?from=EUR&to=GBP`,
+        {
+          next: {
+            revalidate: 3600,
+          },
         },
-      }
-    );
+      );
+
 
     if (!response.ok) {
       throw new Error(
-        "EUR exchange request failed"
+        "EUR exchange request failed",
       );
     }
 
-    const data = await response.json();
 
-    const rate = data?.rates?.GBP;
+    const data =
+      await response.json();
 
-    if (
-      typeof rate !== "number" ||
-      !Number.isFinite(rate) ||
-      rate <= 0
-    ) {
+
+    const rate =
+      safeNumber(
+        data?.rates?.GBP,
+      );
+
+
+    if (rate === null) {
       throw new Error(
-        "Invalid EUR exchange rate"
+        "Invalid EUR exchange rate",
       );
     }
+
 
     return rate;
+
   } catch {
+
     return FALLBACK_EUR_TO_GBP;
   }
 }
+
 
 /*
 ============================================================
 TCGPLAYER
 ============================================================
+
+TCGplayer can contain several finishes, for example:
+
+- holofoil
+- reverseHolofoil
+- normal
+- 1stEditionHolofoil
+- 1stEditionNormal
+- unlimitedHolofoil
+- unlimitedNormal
+- promo
+- other finishes
+
+We check preferred finishes first and then inspect every
+remaining finish.
+
+Price preference:
+
+1. market
+2. mid
+3. low
+
+We deliberately do NOT use "high" as a market price because
+high represents the upper end of listings rather than a
+typical market value.
+============================================================
 */
 
 function getTcgplayerUsd(
-  card: Card
+  card: Card,
 ): number | null {
+
   const prices =
     card.tcgplayer?.prices;
 
-  if (!prices) {
+
+  if (
+    !prices ||
+    typeof prices !== "object"
+  ) {
     return null;
   }
+
+
+  /*
+  ----------------------------------------------------------
+  Helper for one finish
+  ----------------------------------------------------------
+  */
+
+  function getFinishPrice(
+    finish: unknown,
+  ): number | null {
+
+    if (
+      !finish ||
+      typeof finish !== "object"
+    ) {
+      return null;
+    }
+
+
+    const data =
+      finish as Record<
+        string,
+        unknown
+      >;
+
+
+    /*
+     * Market is the preferred value.
+     */
+    const market =
+      safeNumber(
+        data.market,
+      );
+
+
+    if (market !== null) {
+      return market;
+    }
+
+
+    /*
+     * Mid is the next best fallback.
+     */
+    const mid =
+      safeNumber(
+        data.mid,
+      );
+
+
+    if (mid !== null) {
+      return mid;
+    }
+
+
+    /*
+     * Low is preferable to returning no
+     * price at all when market/mid are absent.
+     */
+    const low =
+      safeNumber(
+        data.low,
+      );
+
+
+    if (low !== null) {
+      return low;
+    }
+
+
+    return null;
+  }
+
 
   /*
   ----------------------------------------------------------
@@ -181,33 +363,41 @@ function getTcgplayerUsd(
   ----------------------------------------------------------
   */
 
-  const finishes = [
-    prices.holofoil,
-    prices.reverseHolofoil,
-    prices.normal,
-    prices["1stEditionHolofoil"],
-    prices["1stEditionNormal"],
+  const preferredFinishes = [
+    "holofoil",
+    "reverseHolofoil",
+    "normal",
+    "1stEditionHolofoil",
+    "1stEditionNormal",
+    "unlimitedHolofoil",
+    "unlimitedNormal",
   ];
 
-  for (const finish of finishes) {
-    if (!finish) {
-      continue;
-    }
 
-    const market =
-      safeNumber(finish.market);
+  for (
+    const finishName of preferredFinishes
+  ) {
 
-    if (market !== null) {
-      return market;
-    }
+    const finish =
+      (
+        prices as Record<
+          string,
+          unknown
+        >
+      )[finishName];
 
-    const mid =
-      safeNumber(finish.mid);
 
-    if (mid !== null) {
-      return mid;
+    const value =
+      getFinishPrice(
+        finish,
+      );
+
+
+    if (value !== null) {
+      return value;
     }
   }
+
 
   /*
   ----------------------------------------------------------
@@ -215,118 +405,281 @@ function getTcgplayerUsd(
   ----------------------------------------------------------
   */
 
-  for (const finish of Object.values(prices)) {
-    if (!finish) {
-      continue;
-    }
+  for (
+    const finish of Object.values(
+      prices as Record<
+        string,
+        unknown
+      >,
+    )
+  ) {
 
-    const market =
-      safeNumber(finish.market);
+    const value =
+      getFinishPrice(
+        finish,
+      );
 
-    if (market !== null) {
-      return market;
-    }
 
-    const mid =
-      safeNumber(finish.mid);
-
-    if (mid !== null) {
-      return mid;
+    if (value !== null) {
+      return value;
     }
   }
 
+
   return null;
 }
+
 
 /*
 ============================================================
 CARDMARKET
 ============================================================
+
+Cardmarket normally provides:
+
+- averageSellPrice
+- lowPrice
+- trendPrice
+- suggestedPrice
+- lowPriceExPlus
+- avg1
+- avg7
+- avg30
+
+Preference:
+
+1. averageSellPrice
+2. trendPrice
+3. lowPrice
+4. lowPriceExPlus
+5. avg7
+6. avg30
+7. avg1
+8. suggestedPrice
+
+Zero values are ignored.
+============================================================
 */
 
 function getCardmarketEur(
-  card: Card
+  card: Card,
 ): number | null {
+
   const prices =
     card.cardmarket?.prices;
 
-  if (!prices) {
+
+  if (
+    !prices ||
+    typeof prices !== "object"
+  ) {
     return null;
   }
 
+
+  const data =
+    prices as Record<
+      string,
+      unknown
+    >;
+
+
+  /*
+  ----------------------------------------------------------
+  Average sell price
+  ----------------------------------------------------------
+  */
+
   const average =
     safeNumber(
-      prices.averageSellPrice
+      data.averageSellPrice,
     );
+
 
   if (average !== null) {
     return average;
   }
 
+
+  /*
+  ----------------------------------------------------------
+  Trend price
+  ----------------------------------------------------------
+  */
+
   const trend =
     safeNumber(
-      prices.trendPrice
+      data.trendPrice,
     );
+
 
   if (trend !== null) {
     return trend;
   }
 
-  const suggested =
-    safeNumber(
-      prices.suggestedPrice
-    );
 
-  if (suggested !== null) {
-    return suggested;
-  }
+  /*
+  ----------------------------------------------------------
+  Low price
+  ----------------------------------------------------------
+  */
 
   const low =
     safeNumber(
-      prices.lowPrice
+      data.lowPrice,
     );
+
 
   if (low !== null) {
     return low;
   }
 
+
+  /*
+  ----------------------------------------------------------
+  Low price EX+
+  ----------------------------------------------------------
+  */
+
+  const lowExPlus =
+    safeNumber(
+      data.lowPriceExPlus,
+    );
+
+
+  if (lowExPlus !== null) {
+    return lowExPlus;
+  }
+
+
+  /*
+  ----------------------------------------------------------
+  Seven-day average
+  ----------------------------------------------------------
+  */
+
+  const avg7 =
+    safeNumber(
+      data.avg7,
+    );
+
+
+  if (avg7 !== null) {
+    return avg7;
+  }
+
+
+  /*
+  ----------------------------------------------------------
+  Thirty-day average
+  ----------------------------------------------------------
+  */
+
+  const avg30 =
+    safeNumber(
+      data.avg30,
+    );
+
+
+  if (avg30 !== null) {
+    return avg30;
+  }
+
+
+  /*
+  ----------------------------------------------------------
+  One-day average
+  ----------------------------------------------------------
+  */
+
+  const avg1 =
+    safeNumber(
+      data.avg1,
+    );
+
+
+  if (avg1 !== null) {
+    return avg1;
+  }
+
+
+  /*
+  ----------------------------------------------------------
+  Suggested price
+  ----------------------------------------------------------
+  */
+
+  const suggested =
+    safeNumber(
+      data.suggestedPrice,
+    );
+
+
+  if (suggested !== null) {
+    return suggested;
+  }
+
+
   return null;
 }
+
 
 /*
 ============================================================
 COMBINED MARKET PRICE
 ============================================================
+
+Combines the available GBP prices.
+
+If eBay is unavailable, the average still uses:
+
+- TCGplayer
+- Cardmarket
+
+If only one source is available, that source becomes the
+market price.
+
+============================================================
 */
 
 function calculateCombinedPrice(
-  prices: Array<number | null>
+  prices: Array<number | null>,
 ): number | null {
+
   const valid =
     prices.filter(
       (
-        value
+        value,
       ): value is number =>
         typeof value === "number" &&
         Number.isFinite(value) &&
-        value > 0
+        value > 0,
     );
 
-  if (!valid.length) {
+
+  if (
+    !valid.length
+  ) {
     return null;
   }
 
+
   const total =
     valid.reduce(
-      (sum, value) =>
+      (
+        sum,
+        value,
+      ) =>
         sum + value,
-      0
+      0,
     );
 
+
   return roundPrice(
-    total / valid.length
+    total / valid.length,
   );
 }
+
 
 /*
 ============================================================
@@ -335,7 +688,7 @@ MAIN PRICING FUNCTION
 */
 
 export async function calculatePrices(
-  card: Card
+  card: Card,
 ): Promise<PriceResult> {
 
   /*
@@ -348,13 +701,14 @@ export async function calculatePrices(
     getEbaySoldPrices(
       card.name,
       card.set?.name,
-      card.number
+      card.number,
     ).catch(
       () => ({
         sales: [],
         average: null,
-      })
+      }),
     );
+
 
   /*
   ----------------------------------------------------------
@@ -373,9 +727,10 @@ export async function calculatePrices(
           FALLBACK_EUR_TO_GBP,
         ] as [
           number,
-          number
-        ]
+          number,
+        ],
     );
+
 
   /*
   ----------------------------------------------------------
@@ -388,6 +743,7 @@ export async function calculatePrices(
     eurToGbp,
   ] = await currencyPromise;
 
+
   /*
   ----------------------------------------------------------
   TCGPLAYER
@@ -398,19 +754,32 @@ export async function calculatePrices(
     | number
     | null = null;
 
-  try {
-    const usd =
-      getTcgplayerUsd(card);
 
-    if (usd !== null) {
+  try {
+
+    const usd =
+      getTcgplayerUsd(
+        card,
+      );
+
+
+    if (
+      usd !== null &&
+      Number.isFinite(usdToGbp) &&
+      usdToGbp > 0
+    ) {
+
       tcgplayer =
         roundPrice(
-          usd * usdToGbp
+          usd * usdToGbp,
         );
     }
+
   } catch {
+
     tcgplayer = null;
   }
+
 
   /*
   ----------------------------------------------------------
@@ -422,19 +791,32 @@ export async function calculatePrices(
     | number
     | null = null;
 
-  try {
-    const eur =
-      getCardmarketEur(card);
 
-    if (eur !== null) {
+  try {
+
+    const eur =
+      getCardmarketEur(
+        card,
+      );
+
+
+    if (
+      eur !== null &&
+      Number.isFinite(eurToGbp) &&
+      eurToGbp > 0
+    ) {
+
       cardmarket =
         roundPrice(
-          eur * eurToGbp
+          eur * eurToGbp,
         );
     }
+
   } catch {
+
     cardmarket = null;
   }
+
 
   /*
   ----------------------------------------------------------
@@ -445,10 +827,12 @@ export async function calculatePrices(
   const ebay =
     await ebayPromise;
 
+
   const ebayPrice =
     safeNumber(
-      ebay.average
+      ebay.average,
     );
+
 
   /*
   ----------------------------------------------------------
@@ -463,26 +847,26 @@ export async function calculatePrices(
       ebayPrice,
     ]);
 
+
   /*
   ----------------------------------------------------------
   SAVE PRICE HISTORY
   ----------------------------------------------------------
-  
+
   Every successful price calculation creates or updates
   today's snapshot for this card.
 
   The database uses:
-  
+
     card_id + snapshot_date
 
-  as the unique key, so repeatedly viewing the same card
-  on the same day does NOT create duplicate history rows.
+  as the unique key.
 
-  History failures are deliberately non-fatal. If SQLite
-  fails, the live price is still returned normally.
+  History failures are deliberately non-fatal.
   */
 
   try {
+
     recordPriceSnapshot(
       card.id,
       {
@@ -490,18 +874,17 @@ export async function calculatePrices(
         cardmarket,
         ebay: ebayPrice,
         average,
-      }
+      },
     );
-  } catch {
-    /*
-    --------------------------------------------------------
-    IMPORTANT
-    --------------------------------------------------------
 
-    Never allow price-history storage to break the live
-    pricing system.
-    */
+  } catch {
+
+    /*
+     * Price-history storage must never break
+     * live pricing.
+     */
   }
+
 
   /*
   ----------------------------------------------------------

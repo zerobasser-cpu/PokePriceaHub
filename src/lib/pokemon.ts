@@ -295,6 +295,101 @@ function setCached<T>(
 
 
 /* ============================================================
+   PRICING JSON PARSER
+============================================================ */
+
+/**
+ * SQLite stores the TCGplayer and Cardmarket columns as
+ * JSON text.
+ *
+ * Example:
+ *
+ * {
+ *   "url": "...",
+ *   "prices": {
+ *     "holofoil": {
+ *       "market": 897.19
+ *     }
+ *   }
+ * }
+ *
+ * When the database row is loaded, those fields may therefore
+ * be strings rather than JavaScript objects.
+ *
+ * TypeScript casts do NOT parse JSON.
+ *
+ * This helper safely handles both:
+ *
+ * - already-parsed objects
+ * - JSON strings
+ *
+ * Invalid or empty pricing data is treated as undefined so
+ * one bad card cannot break the website.
+ */
+
+function parsePricingObject(
+  value: unknown,
+): Card["tcgplayer"] | Card["cardmarket"] | undefined {
+
+  if (!value) {
+    return undefined;
+  }
+
+  /*
+   * Already a JavaScript object.
+   */
+  if (
+    typeof value === "object" &&
+    value !== null
+  ) {
+    return value as
+      | Card["tcgplayer"]
+      | Card["cardmarket"];
+  }
+
+  /*
+   * SQLite normally gives us JSON as TEXT.
+   */
+  if (
+    typeof value === "string"
+  ) {
+
+    const trimmed =
+      value.trim();
+
+    if (!trimmed) {
+      return undefined;
+    }
+
+    try {
+
+      const parsed =
+        JSON.parse(trimmed);
+
+      if (
+        parsed &&
+        typeof parsed === "object"
+      ) {
+        return parsed as
+          | Card["tcgplayer"]
+          | Card["cardmarket"];
+      }
+
+    } catch {
+      /*
+       * Invalid JSON is treated as missing pricing.
+       *
+       * This deliberately does not throw because pricing
+       * problems should never prevent a card from loading.
+       */
+    }
+  }
+
+  return undefined;
+}
+
+
+/* ============================================================
    IMAGE HELPERS
 ============================================================ */
 
@@ -526,15 +621,22 @@ function normaliseCard(
       },
     },
 
+    /*
+     * IMPORTANT:
+     *
+     * The database stores these as JSON strings.
+     * Parse them before calculatePrices() receives
+     * the card.
+     */
     tcgplayer:
-      raw.tcgplayer
-        ? (raw.tcgplayer as Card["tcgplayer"])
-        : undefined,
+      parsePricingObject(
+        raw.tcgplayer,
+      ),
 
     cardmarket:
-      raw.cardmarket
-        ? (raw.cardmarket as Card["cardmarket"])
-        : undefined,
+      parsePricingObject(
+        raw.cardmarket,
+      ),
   };
 }
 
