@@ -132,7 +132,6 @@ function normaliseCards(raw: unknown): PokemonCard[] {
   ) {
     const object = raw as Record<string, unknown>;
 
-    // { data: [...] }
     if (Array.isArray(object.data)) {
       return object.data.filter(
         (item): item is PokemonCard =>
@@ -142,7 +141,6 @@ function normaliseCards(raw: unknown): PokemonCard[] {
       );
     }
 
-    // Single card object
     if (
       typeof object.id === "string" &&
       typeof object.name === "string"
@@ -150,7 +148,6 @@ function normaliseCards(raw: unknown): PokemonCard[] {
       return [object as PokemonCard];
     }
 
-    // Object keyed by card ID
     const values = Object.values(object);
 
     if (values.length > 0) {
@@ -267,6 +264,51 @@ function getJsonFiles(directory: string): string[] {
 }
 
 // ============================================================
+// PERMANENT SET ID RESOLUTION
+// ============================================================
+//
+// The Pokémon card IDs are structured like:
+//
+//     base1-1
+//     base1-2
+//     base1-3
+//     sv3-1
+//     sv3-2
+//     swsh12pt5-1
+//
+// Therefore the portion before the final "-" is the set ID.
+//
+// This is intentionally used as a fallback when the source JSON
+// does not contain card.set.id.
+//
+// ============================================================
+
+function getSetIdFromCardId(
+  cardId: string
+): string | null {
+  const value = String(cardId || "").trim();
+
+  if (!value) {
+    return null;
+  }
+
+  const separator = value.lastIndexOf("-");
+
+  if (
+    separator <= 0 ||
+    separator >= value.length - 1
+  ) {
+    return null;
+  }
+
+  const setId = value
+    .slice(0, separator)
+    .trim();
+
+  return setId || null;
+}
+
+// ============================================================
 // VALIDATE SOURCE DATA
 // ============================================================
 
@@ -279,6 +321,7 @@ console.log("");
 console.log(
   `Source directory:\n${SOURCE_ROOT}`
 );
+
 console.log("");
 
 if (!fs.existsSync(SOURCE_ROOT)) {
@@ -321,6 +364,29 @@ console.log(
 );
 
 console.log("");
+
+// ============================================================
+// BUILD SET LOOKUP
+// ============================================================
+//
+// This allows us to fill missing set metadata from sets/en.json
+// even when the individual card JSON doesn't contain card.set.
+//
+// ============================================================
+
+const setLookup = new Map<
+  string,
+  PokemonSet
+>();
+
+for (const set of sets) {
+  if (set.id) {
+    setLookup.set(
+      set.id,
+      set
+    );
+  }
+}
 
 // ============================================================
 // LOAD CARDS
@@ -663,27 +729,35 @@ const importSets = db.transaction(
       insertSet.run({
         id: set.id,
         name: set.name,
+
         series: stringOrNull(
           set.series
         ),
+
         printed_total: numberOrNull(
           set.printedTotal
         ),
+
         total: numberOrNull(
           set.total
         ),
+
         release_date: stringOrNull(
           set.releaseDate
         ),
+
         updated_at: stringOrNull(
           set.updatedAt
         ),
+
         symbol_image: stringOrNull(
           set.images?.symbol
         ),
+
         logo_image: stringOrNull(
           set.images?.logo
         ),
+
         data_json: json(set),
       });
     }
@@ -708,6 +782,11 @@ console.log("");
 let totalCards = 0;
 let failedFiles = 0;
 
+let cardsUsingSourceSet = 0;
+let cardsUsingDerivedSet = 0;
+let cardsWithoutSet = 0;
+let cardsWithUnknownSet = 0;
+
 const importCards = db.transaction(
   (cards: PokemonCard[]) => {
     for (const card of cards) {
@@ -715,10 +794,107 @@ const importCards = db.transaction(
         continue;
       }
 
-      const cardSet = card.set;
+      // --------------------------------------------------------
+      // Determine set ID
+      // --------------------------------------------------------
+      //
+      // Priority:
+      //
+      // 1. card.set.id from source JSON
+      // 2. Set ID extracted from card ID
+      //
+      // Example:
+      //
+      // base1-4 -> base1
+      //
+      // This guarantees set relationships are not lost when
+      // card.set is missing from the source data.
+      //
+      // --------------------------------------------------------
+
+      const derivedSetId =
+        getSetIdFromCardId(
+          card.id
+        );
+
+      const sourceSetId =
+        stringOrNull(
+          card.set?.id
+        );
+
+      const resolvedSetId =
+        sourceSetId ||
+        derivedSetId;
+
+      if (sourceSetId) {
+        cardsUsingSourceSet++;
+      } else if (derivedSetId) {
+        cardsUsingDerivedSet++;
+      } else {
+        cardsWithoutSet++;
+      }
+
+      // --------------------------------------------------------
+      // Resolve complete set metadata
+      // --------------------------------------------------------
+
+      const resolvedSet =
+        resolvedSetId
+          ? setLookup.get(
+              resolvedSetId
+            )
+          : undefined;
+
+      if (
+        resolvedSetId &&
+        !resolvedSet
+      ) {
+        cardsWithUnknownSet++;
+      }
+
+      const setName =
+        card.set?.name ||
+        resolvedSet?.name ||
+        null;
+
+      const setSeries =
+        card.set?.series ||
+        resolvedSet?.series ||
+        null;
+
+      const setPrintedTotal =
+        card.set?.printedTotal ??
+        resolvedSet?.printedTotal ??
+        null;
+
+      const setTotal =
+        card.set?.total ??
+        resolvedSet?.total ??
+        null;
+
+      const setReleaseDate =
+        card.set?.releaseDate ||
+        resolvedSet?.releaseDate ||
+        null;
+
+      const setUpdatedAt =
+        card.set?.updatedAt ||
+        resolvedSet?.updatedAt ||
+        null;
+
+      const setSymbolImage =
+        card.set?.images?.symbol ||
+        resolvedSet?.images?.symbol ||
+        null;
+
+      const setLogoImage =
+        card.set?.images?.logo ||
+        resolvedSet?.images?.logo ||
+        null;
 
       insertCard.run({
         id: card.id,
+
         name: card.name,
 
         supertype: stringOrNull(
@@ -818,52 +994,63 @@ const importCards = db.transaction(
           card.cardmarket
         ),
 
-        set_id: stringOrNull(
-          cardSet?.id
-        ),
+        // ======================================================
+        // IMPORTANT:
+        // The permanent fix.
+        // ======================================================
 
-        set_name: stringOrNull(
-          cardSet?.name
-        ),
+        set_id:
+          stringOrNull(
+            resolvedSetId
+          ),
 
-        set_series: stringOrNull(
-          cardSet?.series
-        ),
+        set_name:
+          stringOrNull(
+            setName
+          ),
+
+        set_series:
+          stringOrNull(
+            setSeries
+          ),
 
         set_printed_total:
           numberOrNull(
-            cardSet?.printedTotal
+            setPrintedTotal
           ),
 
         set_total:
           numberOrNull(
-            cardSet?.total
+            setTotal
           ),
 
         set_release_date:
           stringOrNull(
-            cardSet?.releaseDate
+            setReleaseDate
           ),
 
         set_updated_at:
           stringOrNull(
-            cardSet?.updatedAt
+            setUpdatedAt
           ),
 
         set_symbol_image:
           stringOrNull(
-            cardSet?.images?.symbol
+            setSymbolImage
           ),
 
         set_logo_image:
           stringOrNull(
-            cardSet?.images?.logo
+            setLogoImage
           ),
 
         data_json: json(card),
       });
 
-      // Store each type separately for fast filtering
+      // --------------------------------------------------------
+      // Store each type separately
+      // --------------------------------------------------------
+
       if (Array.isArray(card.types)) {
         for (const type of card.types) {
           if (
@@ -925,12 +1112,143 @@ for (
     console.error(
       `Failed to import: ${file}`
     );
-    console.error(String(error));
+    console.error(
+      String(error)
+    );
   }
 }
 
 console.log("");
 console.log("");
+
+// ============================================================
+// DATABASE VALIDATION
+// ============================================================
+
+console.log("Validating set relationships...");
+
+const nullSetCount =
+  db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM cards
+    WHERE set_id IS NULL
+       OR TRIM(set_id) = ''
+  `).get() as {
+    count: number;
+  };
+
+const invalidSetCount =
+  db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM cards c
+    LEFT JOIN sets s
+      ON s.id = c.set_id
+    WHERE c.set_id IS NOT NULL
+      AND s.id IS NULL
+  `).get() as {
+    count: number;
+  };
+
+const linkedSetCount =
+  db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM cards c
+    INNER JOIN sets s
+      ON s.id = c.set_id
+  `).get() as {
+    count: number;
+  };
+
+console.log(
+  `Cards using source set ID:  ${cardsUsingSourceSet.toLocaleString()}`
+);
+
+console.log(
+  `Cards using derived set ID: ${cardsUsingDerivedSet.toLocaleString()}`
+);
+
+console.log(
+  `Cards without set ID:       ${cardsWithoutSet.toLocaleString()}`
+);
+
+console.log(
+  `Cards with unknown set ID:  ${cardsWithUnknownSet.toLocaleString()}`
+);
+
+console.log(
+  `Cards with NULL set_id:     ${Number(nullSetCount.count).toLocaleString()}`
+);
+
+console.log(
+  `Cards with invalid set_id:  ${Number(invalidSetCount.count).toLocaleString()}`
+);
+
+console.log(
+  `Cards correctly linked:     ${Number(linkedSetCount.count).toLocaleString()}`
+);
+
+console.log("");
+
+if (
+  Number(nullSetCount.count) > 0 ||
+  Number(invalidSetCount.count) > 0
+) {
+  console.warn(
+    "WARNING: Some cards could not be linked to a valid set."
+  );
+} else {
+  console.log(
+    "SUCCESS: Every imported card has a valid set relationship."
+  );
+}
+
+console.log("");
+
+// ============================================================
+// SET CARD COUNTS
+// ============================================================
+
+console.log("Checking set card counts...");
+
+const setCounts =
+  db.prepare(`
+    SELECT
+      s.id,
+      s.name,
+      COUNT(c.id) AS card_count
+    FROM sets s
+    LEFT JOIN cards c
+      ON c.set_id = s.id
+    GROUP BY
+      s.id,
+      s.name
+    ORDER BY
+      card_count DESC
+  `).all() as Array<{
+    id: string;
+    name: string;
+    card_count: number;
+  }>;
+
+console.log("");
+
+for (
+  const set of setCounts.slice(0, 10)
+) {
+  console.log(
+    `${set.id.padEnd(18)} ${String(set.card_count).padStart(6)} cards  ${set.name}`
+  );
+}
+
+console.log("");
+
+if (setCounts.length > 10) {
+  console.log(
+    `...and ${setCounts.length - 10} more sets.`
+  );
+
+  console.log("");
+}
 
 // ============================================================
 // OPTIMISE DATABASE
@@ -953,13 +1271,17 @@ const cardCount = db
   .prepare(
     `SELECT COUNT(*) AS count FROM cards`
   )
-  .get() as { count: number };
+  .get() as {
+    count: number;
+  };
 
 const setCount = db
   .prepare(
     `SELECT COUNT(*) AS count FROM sets`
   )
-  .get() as { count: number };
+  .get() as {
+    count: number;
+  };
 
 const rarityCount = db
   .prepare(
@@ -970,7 +1292,9 @@ const rarityCount = db
       AND rarity != ''
     `
   )
-  .get() as { count: number };
+  .get() as {
+    count: number;
+  };
 
 const typeCount = db
   .prepare(
@@ -981,7 +1305,9 @@ const typeCount = db
       AND type != ''
     `
   )
-  .get() as { count: number };
+  .get() as {
+    count: number;
+  };
 
 // ============================================================
 // CLOSE DATABASE
