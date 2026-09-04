@@ -1,18 +1,15 @@
 import Link from "next/link";
 
 import {
-  getFilterOptions
+  getFilterOptions,
 } from "@/lib/pokemon";
 
 export const dynamic = "force-dynamic";
 
 export default async function SetsPage() {
+  const filterOptions = await getFilterOptions();
 
-  const filterOptions =
-    await getFilterOptions();
-
-  const sets =
-    filterOptions.sets ?? [];
+  const sets = filterOptions.sets ?? [];
 
   return (
     <main className="page-shell">
@@ -22,14 +19,12 @@ export default async function SetsPage() {
       ================================================== */}
 
       <header className="site-header">
-
         <div className="container header-inner">
 
           <Link
             href="/"
             className="brand"
           >
-
             <span className="brand-ball">
               ◉
             </span>
@@ -37,12 +32,9 @@ export default async function SetsPage() {
             <span>
               PokePrices
             </span>
-
           </Link>
 
-
           <nav className="main-nav">
-
             <Link href="/">
               Home
             </Link>
@@ -50,11 +42,9 @@ export default async function SetsPage() {
             <Link href="/cards">
               Cards
             </Link>
-
           </nav>
 
         </div>
-
       </header>
 
 
@@ -63,7 +53,6 @@ export default async function SetsPage() {
       ================================================== */}
 
       <section className="page-hero">
-
         <div className="container">
 
           <p className="eyebrow">
@@ -79,7 +68,6 @@ export default async function SetsPage() {
           </p>
 
         </div>
-
       </section>
 
 
@@ -107,51 +95,62 @@ export default async function SetsPage() {
 
           <div className="set-grid">
 
-            {sets.map(
-              (set) => {
+            {sets.map((set) => {
 
-                /*
-                 * The filter options returned by
-                 * the Pokémon API can be either
-                 * simple strings or objects.
-                 *
-                 * Handle both formats safely.
-                 */
+              /*
+               * Sets normally come from the database/API
+               * as objects containing:
+               *
+               *   id
+               *   name
+               *
+               * Some fallback data may still be simple
+               * strings, so handle both safely.
+               */
 
-                const setValue =
-                  typeof set === "string"
-                    ? set
-                    : set.id;
+              const setValue =
+                typeof set === "string"
+                  ? set
+                  : set.id;
 
-                const setName =
-                  typeof set === "string"
-                    ? set
-                    : set.name;
+              const setName =
+                typeof set === "string"
+                  ? set
+                  : set.name;
 
-                return (
+              /*
+               * IMPORTANT:
+               *
+               * Use setId because the cards database filters
+               * cards using:
+               *
+               *     cards.set_id
+               *
+               * This ensures the value passed to /cards is
+               * the actual database set ID.
+               */
 
-                  <Link
-                    key={setValue}
-                    href={`/cards?set=${encodeURIComponent(
-                      setValue
-                    )}`}
-                    className="set-card"
-                  >
+              return (
+                <Link
+                  key={setValue}
+                  href={`/cards?setId=${encodeURIComponent(
+                    setValue
+                  )}`}
+                  className="set-card"
+                >
 
-                    <span className="set-name">
-                      {setName}
-                    </span>
+                  <span className="set-name">
+                    {setName}
+                  </span>
 
-                    <span className="set-arrow">
-                      →
-                    </span>
+                  <span className="set-arrow">
+                    →
+                  </span>
 
-                  </Link>
+                </Link>
+              );
 
-                );
-
-              }
-            )}
+            })}
 
           </div>
 
@@ -165,7 +164,6 @@ export default async function SetsPage() {
       ================================================== */}
 
       <footer className="site-footer">
-
         <div className="container">
 
           <p>
@@ -173,7 +171,6 @@ export default async function SetsPage() {
           </p>
 
         </div>
-
       </footer>
 
     </main>
