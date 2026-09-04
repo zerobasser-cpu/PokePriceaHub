@@ -241,10 +241,26 @@
 
   #results {
     margin-top: 34px;
-    display: none;
+    opacity: 0;
+    transform: translateY(10px);
+    max-height: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: opacity 0.45s ease, transform 0.45s ease;
   }
 
-  #results.visible { display: block; }
+  #results.visible {
+    opacity: 1;
+    transform: none;
+    max-height: none;
+    overflow: visible;
+    pointer-events: auto;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
 
   .verdict-block {
     background: var(--panel);
@@ -265,9 +281,21 @@
 
   .verdict-pct {
     font-family: var(--font-mono);
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-dim);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .favored-badge {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+    background: var(--deck-color, var(--c-neutral));
+    color: #14161f;
   }
 
   .verdict-bar {
@@ -294,6 +322,45 @@
   .verdict-sentence strong { font-weight: 600; }
 
   .cat-section { margin-bottom: 22px; }
+
+  .matchup-notes {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-card);
+    padding: 16px 18px;
+    margin-bottom: 22px;
+  }
+
+  .matchup-notes-heading {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14.5px;
+    margin: 0 0 12px;
+  }
+
+  .matchup-note-item {
+    padding-left: 12px;
+    border-left: 2px solid var(--accent-neutral);
+    margin-bottom: 12px;
+    opacity: 0;
+    animation: fadeInUp 0.4s ease forwards;
+  }
+
+  .matchup-note-item:last-child { margin-bottom: 0; }
+
+  .matchup-note-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 3px;
+  }
+
+  .matchup-note-detail {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.55;
+    margin: 0;
+  }
 
   .cat-row {
     padding: 14px 0;
@@ -377,6 +444,48 @@
     background: #14161f;
     border: 1px solid var(--panel-border);
     color: var(--text-dim);
+  }
+
+  .suggest-block {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--panel-border);
+  }
+
+  .suggest-heading {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    margin: 0 0 10px;
+  }
+
+  .suggest-item {
+    padding-left: 10px;
+    border-left: 2px solid var(--deck-color, var(--c-neutral));
+    margin-bottom: 10px;
+    opacity: 0;
+    animation: fadeInUp 0.4s ease forwards;
+  }
+
+  .suggest-item:last-child { margin-bottom: 0; }
+
+  .suggest-item-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 2px;
+  }
+
+  .suggest-item-detail {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .suggest-empty {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin: 0;
   }
 
   details.methodology {
@@ -480,6 +589,8 @@
       <p class="verdict-sentence" id="verdictSentence"></p>
     </div>
 
+    <div class="matchup-notes" id="matchupNotes"></div>
+
     <div class="cat-section" id="catSection"></div>
 
     <div class="comp-grid" id="compGrid"></div>
@@ -489,6 +600,8 @@
       <div class="meth-body">
         <p>This tool reads card names and counts only — it has no knowledge of attack damage, HP, abilities, or how specific cards interact. It scores three things it can actually infer from a list: how much of the deck is dedicated to drawing and searching for cards (consistency), how much of the Pokémon lineup is made up of multi-prize attackers like ex, V, VMAX, VSTAR, or GX cards (offensive power, which is also a prize-giveaway risk), and how concentrated the attacker lineup is around a small core versus spread across many one-ofs (focus).</p>
         <p>Those three scores are weighted and compared to produce a percentage split. It is not a game simulation, and it can't account for type matchups, specific tech counters, or the skill of either player.</p>
+        <p>The suggested additions under each deck come from the same rule-based checks — flagging things like a thin Supporter line, no bench-hitting Trainer card, or no way to recover from a retreat cost — compared against what's already in the list. They're generic structural gaps, not picks tailored to your specific matchup or format.</p>
+        <p>Suggested cards are chosen to reflect the Standard format following the April 2026 rotation, to the best of publicly available information as of this tool's last update. Exact tournament legality depends on a card's specific printing (its regulation mark), so double-check any suggestion against the official Pok\u00e9mon TCG card database before adding it to a tournament deck.</p>
       </div>
     </details>
 
@@ -528,35 +641,51 @@
     "guzma","lysandre","erika's hospitality","roxanne","arven","penny","irida","melony",
     "team yell grunt","klara","avery","raihan","mustard","peonia","brock's","hop","volo",
     "acerola","hala","kukui","hau","gladion","larry","grusha","geeta","larry's","jasmine",
-    "crispin","carmine","kieran","atticus","brassius","juniper"
+    "crispin","carmine","kieran","atticus","brassius","juniper","briar","lillie's determination",
+    "lillie's pearl","n's "
   ];
 
   var SEARCH_ITEMS = [
     "ultra ball","quick ball","nest ball","level ball","great ball","dive ball","heavy ball",
     "buddy-buddy poffin","evolution incense","poke ball","master ball","luxury ball","friend ball",
-    "battle vip pass"
+    "battle vip pass","dusk ball"
   ];
 
   var UTILITY_ITEMS = [
     "switch","escape rope","escape board","ordinary rod","super rod","energy retrieval",
     "energy search","choice belt","air balloon","float stone","fog crystal","forest seal stone",
     "counter catcher","counter gain","pal pad","trekking shoes","technical machine","vitality band",
-    "exp. share","big charm","defiance band","rescue board","enriching energy"
+    "exp. share","big charm","defiance band","rescue board","enriching energy","wondrous patch",
+    "unfair stamp","survival brace","neutralization zone","awakening drum","maximum belt",
+    "secret box","prime catcher"
   ];
 
   var STADIUMS = [
     "path to the peak","collapsed stadium","training court","lost city","temple of sinnoh",
-    "pokestop","pok\u00e9stop","artazon","town store","jamming tower"
+    "pokestop","pok\u00e9stop","artazon","town store","jamming tower","area zero underdepths"
   ];
 
   var RARE_CANDY = "rare candy";
 
   var ALL_TRAINER_KEYWORDS = SUPPORTERS.concat(SEARCH_ITEMS, UTILITY_ITEMS, STADIUMS, [RARE_CANDY]);
 
+  // Curated pools used only for "suggested additions" — kept intentionally smaller
+  // than the classification lists above, and limited to cards understood to be
+  // Standard-legal following the April 2026 (G regulation mark) rotation.
+  var RECOMMEND_SUPPORTERS = ["lillie's determination", "briar"];
+  var RECOMMEND_SEARCH = ["ultra ball", "buddy-buddy poffin", "dusk ball"];
+  var RECOMMEND_GUST = ["boss's orders"];
+  var RECOMMEND_RECOVERY = ["super rod", "ordinary rod"];
+  var RECOMMEND_RETREAT_AID = ["switch", "float stone", "air balloon"];
+  var RECOMMEND_STADIUM = ["area zero underdepths"];
+  var RECOMMEND_TOOLS = ["choice belt", "vitality band", "big charm", "defiance band"];
+  var ALL_TOOL_KEYWORDS = RECOMMEND_TOOLS.concat(["float stone", "air balloon", "exp. share", "technical machine", "rescue board"]);
+  var ACE_SPECS = ["unfair stamp", "survival brace", "neutralization zone", "awakening drum", "maximum belt", "secret box", "prime catcher"];
+
   var els = {};
   ["listA","listB","nameA","nameB","countA","countB","forecastBtn","exampleBtn","clearBtn",
    "errorLine","results","verdictNameA","verdictNameB","segA","segB","pctA","pctB",
-   "verdictSentence","catSection","compGrid","panelA","panelB"].forEach(function (id) {
+   "verdictSentence","matchupNotes","catSection","compGrid","panelA","panelB"].forEach(function (id) {
     els[id] = document.getElementById(id);
   });
 
@@ -680,8 +809,150 @@
       supporterCopies: supporterCopies, searchCopies: searchCopies, hasRareCandy: hasRareCandy,
       bigAttackerCopies: bigAttackerCopies, uniqueCount: uniqueCount,
       consistencyRaw: consistencyRaw, offenseRatio: offenseRatio, focusRatio: focusRatio,
-      dominantType: dominantType, chips: recognizedChips.slice(0, 6)
+      dominantType: dominantType, chips: recognizedChips.slice(0, 6),
+      trainerEntries: trainer
     };
+  }
+
+  function hasKeyword(trainerEntries, keywords) {
+    return trainerEntries.some(function (e) {
+      return keywords.some(function (k) { return e.lowerName.indexOf(k) !== -1; });
+    });
+  }
+
+  function generateSuggestions(met) {
+    var suggestions = [];
+    var trainerEntries = met.trainerEntries;
+
+    if (met.total !== 60) {
+      suggestions.push({
+        title: met.total < 60 ? 'Deck is under 60 cards' : 'Deck is over 60 cards',
+        detail: 'Counted ' + met.total + ' cards. Standard deck construction requires exactly 60 — fill out or trim the list before relying on this forecast.'
+      });
+    }
+
+    if (met.energyCount > 0 && (met.energyCount < 7 || met.energyCount > 18)) {
+      suggestions.push({
+        title: met.energyCount < 7 ? 'Energy count looks light' : 'Energy count looks heavy',
+        detail: met.energyCount + ' Energy card' + (met.energyCount === 1 ? '' : 's') + ' is ' +
+          (met.energyCount < 7 ? 'below' : 'above') + ' the 8\u201316 range most decks land in \u2014 worth double-checking attacks stay consistently affordable.'
+      });
+    }
+
+    if (met.supporterCopies < 6) {
+      var missingDraw = RECOMMEND_SUPPORTERS.filter(function (k) { return !hasKeyword(trainerEntries, [k]); });
+      if (missingDraw.length) {
+        suggestions.push({
+          title: 'Add more draw Supporters',
+          detail: 'Only ' + met.supporterCopies + ' recognized Supporter cop' + (met.supporterCopies === 1 ? 'y' : 'ies') +
+            ' found. ' + capitalizeList(missingDraw) + ' would help see more of the deck each turn.'
+        });
+      }
+    }
+
+    if (met.searchCopies < 4) {
+      var missingSearch = RECOMMEND_SEARCH.filter(function (k) { return !hasKeyword(trainerEntries, [k]); });
+      if (missingSearch.length) {
+        suggestions.push({
+          title: 'Add more Pok\u00e9mon search',
+          detail: 'Only ' + met.searchCopies + ' search item' + (met.searchCopies === 1 ? '' : 's') +
+            ' found. ' + capitalizeList(missingSearch) + ' would help find key attackers faster.'
+        });
+      }
+    }
+
+    if (!hasKeyword(trainerEntries, ALL_TOOL_KEYWORDS)) {
+      var missingTools = RECOMMEND_TOOLS.filter(function (k) { return !hasKeyword(trainerEntries, [k]); });
+      suggestions.push({
+        title: 'Add a Pok\u00e9mon Tool',
+        detail: 'No Tool card found. ' + capitalizeList(missingTools) + ' can add damage, bulk, or utility for a single card slot.'
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, RECOMMEND_GUST)) {
+      suggestions.push({
+        title: 'Add a way to reach the bench',
+        detail: "No Boss's Orders found. Without a gust effect, this deck can struggle to close out games against a spread-out board."
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, RECOMMEND_RETREAT_AID.concat(["escape rope", "escape board"]))) {
+      suggestions.push({
+        title: 'Add a retreat aid',
+        detail: 'No Switch, Float Stone, or similar found. Getting stuck behind a retreat cost can cost a turn at a critical moment.'
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, RECOMMEND_RECOVERY)) {
+      suggestions.push({
+        title: 'Add late-game recovery',
+        detail: 'No Super Rod or Ordinary Rod found. A recovery card keeps the deck running once early copies of key Pok\u00e9mon and Energy are used up.'
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, RECOMMEND_STADIUM.concat(STADIUMS))) {
+      suggestions.push({
+        title: 'Consider a Stadium',
+        detail: 'No Stadium card found. Area Zero Underdepths is a current staple worth testing if the deck wants extra Bench space or a consistency boost.'
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, ACE_SPECS) && met.supporterCopies < 6) {
+      suggestions.push({
+        title: 'Consider an ACE SPEC',
+        detail: "No ACE SPEC card found (only one is allowed per deck). With Iono rotated out of Standard, a card like Unfair Stamp is worth testing as a disruption option \u2014 check current legality and whether it fits this deck's plan first."
+      });
+    }
+
+    if (met.pokemonCount > 0 && met.offenseRatio > 0.75) {
+      suggestions.push({
+        title: 'Heavy on multi-prize attackers',
+        detail: 'Most of the Pok\u00e9mon lineup gives up two prizes on knockout. A cheap single-prize attacker can help claw back a prize race this deck falls behind on.'
+      });
+    }
+
+    return suggestions.slice(0, 5);
+  }
+
+  function capitalizeList(keywords) {
+    return keywords.slice(0, 2).map(function (k) {
+      return k.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    }).join(' or ');
+  }
+
+  function generateMatchupNotes(nameA, consA, offA, focA, nameB, consB, offB, focB) {
+    var notes = [];
+
+    if (Math.abs(consA - consB) > 2.5) {
+      var laggingCons = consA < consB ? nameA : nameB;
+      var leadingCons = consA < consB ? nameB : nameA;
+      notes.push({
+        title: 'Consistency gap',
+        detail: laggingCons + "'s engine lags noticeably behind " + leadingCons + "'s. Expect to lean harder on early Supporters and searches to keep pace and avoid falling behind on board development."
+      });
+    }
+
+    if (Math.abs(offA - offB) > 2.5) {
+      var highOffense = offA >= offB ? nameA : nameB;
+      var lowOffense = offA >= offB ? nameB : nameA;
+      notes.push({
+        title: 'Prize-trade asymmetry',
+        detail: highOffense + ' gives up two prizes on most knockouts, while ' + lowOffense + ' mostly gives up one. ' +
+          lowOffense + ' can afford to trade evenly; ' + highOffense + ' needs to close the game out before the prize count catches up.'
+      });
+    }
+
+    if (Math.abs(focA - focB) > 2.5) {
+      var moreFocused = focA >= focB ? nameA : nameB;
+      var moreSpread = focA >= focB ? nameB : nameA;
+      notes.push({
+        title: 'Focused plan vs. toolbox',
+        detail: moreFocused + "'s attackers are concentrated around a small core, which is consistent but predictable. " +
+          moreSpread + "'s wider lineup may already carry an answer built in \u2014 " + moreFocused + ' should expect to see it.'
+      });
+    }
+
+    return notes.slice(0, 3);
   }
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -779,8 +1050,18 @@
     els.pctA.textContent = overall.a + '%';
     els.pctB.textContent = overall.b + '%';
 
-    var leader = overall.a >= overall.b ? { name: nameA, pct: overall.a } : { name: nameB, pct: overall.b };
+    var leader = overall.a >= overall.b ? { name: nameA, pct: overall.a, color: colorA } : { name: nameB, pct: overall.b, color: colorB };
     var margin = Math.abs(overall.a - overall.b);
+
+    if (margin >= 4) {
+      var badgeTarget = overall.a >= overall.b ? els.verdictNameA : els.verdictNameB;
+      var badge = document.createElement('span');
+      badge.className = 'favored-badge';
+      badge.style.setProperty('--deck-color', leader.color);
+      badge.textContent = 'Favored';
+      badgeTarget.appendChild(badge);
+    }
+
     var gaps = [
       { label: 'a deeper consistency engine', diff: consA - consB, dir: consA >= consB ? nameA : nameB },
       { label: 'a heavier multi-prize attacker package', diff: offA - offB, dir: offA >= offB ? nameA : nameB },
@@ -797,6 +1078,25 @@
       sentence = '<strong>' + leader.name + '</strong> is favored, projected around <strong>' + leader.pct + '%</strong>, largely on the strength of ' + reasonText + '.';
     }
     els.verdictSentence.innerHTML = sentence;
+
+    els.matchupNotes.innerHTML = '';
+    var matchupNoteList = generateMatchupNotes(nameA, consA, offA, focA, nameB, consB, offB, focB);
+    if (matchupNoteList.length) {
+      var mHeading = document.createElement('p');
+      mHeading.className = 'matchup-notes-heading';
+      mHeading.textContent = 'Head-to-head considerations';
+      els.matchupNotes.appendChild(mHeading);
+      matchupNoteList.forEach(function (n, i) {
+        var item = document.createElement('div');
+        item.className = 'matchup-note-item';
+        item.style.animationDelay = (i * 70) + 'ms';
+        item.innerHTML = '<p class="matchup-note-title">' + n.title + '</p><p class="matchup-note-detail">' + n.detail + '</p>';
+        els.matchupNotes.appendChild(item);
+      });
+      els.matchupNotes.style.display = 'block';
+    } else {
+      els.matchupNotes.style.display = 'none';
+    }
 
     els.catSection.innerHTML = '';
     var cats = [
@@ -829,8 +1129,9 @@
       panel.className = 'comp-panel';
       panel.style.setProperty('--deck-color', d.color);
       var typeLabel = d.met.dominantType ? (d.met.dominantType.charAt(0).toUpperCase() + d.met.dominantType.slice(1)) : 'Mixed';
+      var isLeader = margin >= 4 && d.name === leader.name;
       panel.innerHTML =
-        '<p class="comp-title">' + d.name + '</p>' +
+        '<p class="comp-title">' + d.name + (isLeader ? '<span class="favored-badge" style="--deck-color:' + d.color + '">Favored</span>' : '') + '</p>' +
         '<div class="comp-counts">' +
           '<span><b>' + d.met.pokemonCount + '</b> Pok\u00e9mon</span>' +
           '<span><b>' + d.met.trainerCount + '</b> Trainer</span>' +
@@ -838,6 +1139,27 @@
           '<span><b>' + typeLabel + '</b> lean</span>' +
         '</div>';
       renderChips(panel, d.met.chips);
+
+      var suggestions = generateSuggestions(d.met);
+      var sBlock = document.createElement('div');
+      sBlock.className = 'suggest-block';
+      if (suggestions.length) {
+        var heading = document.createElement('p');
+        heading.className = 'suggest-heading';
+        heading.textContent = 'Suggested additions';
+        sBlock.appendChild(heading);
+        suggestions.forEach(function (s, i) {
+          var item = document.createElement('div');
+          item.className = 'suggest-item';
+          item.style.animationDelay = (i * 60) + 'ms';
+          item.innerHTML = '<p class="suggest-item-title">' + s.title + '</p><p class="suggest-item-detail">' + s.detail + '</p>';
+          sBlock.appendChild(item);
+        });
+      } else {
+        sBlock.innerHTML = '<p class="suggest-heading">Suggested additions</p><p class="suggest-empty">No obvious structural gaps found \u2014 the engine looks solid on paper.</p>';
+      }
+      panel.appendChild(sBlock);
+
       els.compGrid.appendChild(panel);
     });
 
@@ -856,13 +1178,13 @@
     updateCount('listB', 'countB');
   });
 
-  var EXAMPLE_A = "Pok\u00e9mon: 12\n3 Charizard ex OBF 125\n2 Charmander OBF 26\n2 Charmeleon OBF 27\n2 Pidgey MEW 16\n2 Pidgeot ex OBF 164\n1 Radiant Charizard CRZ 20\n\nTrainer: 32\n4 Rare Candy\n3 Professor's Research\n2 Boss's Orders\n2 Iono\n2 Arven\n4 Ultra Ball\n3 Nest Ball\n2 Battle VIP Pass\n2 Switch\n2 Choice Belt\n2 Path to the Peak\n2 Forest Seal Stone\n2 Super Rod\n\nEnergy: 16\n10 Fire Energy\n6 Jet Energy\n\nTotal Cards: 60";
+  var EXAMPLE_A = "Pok\u00e9mon: 14\n4 Dreepy\n2 Drakloak\n3 Dragapult ex\n3 Duskull\n1 Dusclops\n1 Dusknoir\n\nTrainer: 30\n3 Lillie's Determination\n2 Briar\n2 Boss's Orders\n4 Ultra Ball\n3 Buddy-Buddy Poffin\n2 Dusk Ball\n2 Switch\n2 Float Stone\n2 Choice Belt\n2 Super Rod\n2 Area Zero Underdepths\n2 Rescue Board\n2 Trekking Shoes\n\nEnergy: 16\n16 Psychic Energy\n\nTotal Cards: 60";
 
-  var EXAMPLE_B = "Pok\u00e9mon: 14\n4 Miraidon ex SVI 81\n3 Iron Hands ex PAR 70\n2 Flaaffy PAR 66\n2 Mareep PAR 65\n2 Zapdos SVI 51\n1 Bibarel BRS 121\n\nTrainer: 30\n4 Professor's Research\n2 Iono\n2 Boss's Orders\n1 Cynthia\n4 Ultra Ball\n3 Nest Ball\n2 Switch\n2 Choice Belt\n2 Path to the Peak\n2 Lost Vacuum\n2 Super Rod\n2 Counter Catcher\n\nEnergy: 16\n8 Lightning Energy\n4 Basic Metal Energy\n4 Double Turbo Energy\n\nTotal Cards: 60";
+  var EXAMPLE_B = "Pok\u00e9mon: 15\n4 Mega Kangaskhan ex\n4 Meowth ex\n4 Lillie's Clefairy ex\n3 Latias ex\n\nTrainer: 29\n4 Dusk Ball\n2 Area Zero Underdepths\n2 Wondrous Patch\n2 Lillie's Pearl\n4 Ultra Ball\n3 Lillie's Determination\n2 Briar\n2 Boss's Orders\n2 Switch\n2 Super Rod\n2 Buddy-Buddy Poffin\n2 Rescue Board\n\nEnergy: 16\n16 Psychic Energy\n\nTotal Cards: 60";
 
   els.exampleBtn.addEventListener('click', function () {
-    els.nameA.value = 'Charizard ex';
-    els.nameB.value = 'Miraidon ex';
+    els.nameA.value = 'Dragapult / Dusknoir';
+    els.nameB.value = "Lillie's Clefairy ex";
     els.listA.value = EXAMPLE_A;
     els.listB.value = EXAMPLE_B;
     updateCount('listA', 'countA');
