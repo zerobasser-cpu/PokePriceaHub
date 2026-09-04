@@ -163,7 +163,9 @@ export default async function HomePage() {
           <p className="hero-subtitle">
             Search thousands of Pokémon TCG
             cards, explore sets, rarities and
-            card prices.
+            card prices and if your a player
+	    try our deck tester out to forcast
+	    different decks outcomes!
           </p>
 
 
