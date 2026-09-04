@@ -1,8 +1,0 @@
-{
-  "/_not-found/page": "/_not-found",
-  "/card/[id]/page": "/card/[id]",
-  "/cards/page": "/cards",
-  "/rarities/page": "/rarities",
-  "/sets/page": "/sets",
-  "/page": "/"
-}
