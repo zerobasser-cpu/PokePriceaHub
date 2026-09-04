@@ -506,7 +506,12 @@ export function getCardById(
         FROM cards c
 
         LEFT JOIN sets s
-          ON s.id = c.set_id
+          ON
+            LOWER(TRIM(s.id)) =
+            LOWER(TRIM(c.set_id))
+            OR
+            LOWER(TRIM(s.name)) =
+            LOWER(TRIM(c.set_id))
 
         WHERE c.id = ?
 
@@ -526,6 +531,30 @@ export function getCardById(
 /*
 ============================================================
 CARD SEARCH
+============================================================
+
+IMPORTANT SET FIX
+
+The database can contain:
+
+cards.set_id = set ID
+
+or, depending on how the data was imported:
+
+cards.set_id = set name
+
+The set page normally passes the set ID.
+
+This search therefore resolves the selected value
+against BOTH sets.id and sets.name.
+
+It also normalises spaces and capitalisation so that:
+
+  sv1
+  SV1
+  " sv1 "
+
+are treated as the same value.
 ============================================================
 */
 
@@ -594,57 +623,156 @@ export function searchDatabaseCards(
     unknown
   > = {};
 
+  /*
+  ----------------------------------------------------------
+  CARD SEARCH
+  ----------------------------------------------------------
+  */
+
   if (search) {
     conditions.push(
-      `(c.name LIKE @search
-        OR c.id LIKE @search
-        OR c.number LIKE @search)`
+      `(
+        LOWER(c.name) LIKE LOWER(@search)
+        OR LOWER(c.id) LIKE LOWER(@search)
+        OR LOWER(c.number) LIKE LOWER(@search)
+      )`
     );
 
     params.search =
       `%${search}%`;
   }
 
+
+  /*
+  ----------------------------------------------------------
+  SET FILTER
+  ----------------------------------------------------------
+
+  Match the selected value against:
+
+  1. cards.set_id directly
+
+  2. sets.id
+
+  3. sets.name
+
+  Then compare the card's set_id against
+  the resolved set ID/name.
+
+  This handles both normal imports and
+  older/imported databases where cards may
+  contain the set name instead of the ID.
+  ----------------------------------------------------------
+  */
+
   if (setId) {
     conditions.push(
-      `c.set_id = @setId`
+      `(
+        LOWER(TRIM(c.set_id)) =
+          LOWER(TRIM(@setId))
+
+        OR
+
+        EXISTS (
+          SELECT 1
+
+          FROM sets filter_set
+
+          WHERE
+            (
+              LOWER(TRIM(filter_set.id)) =
+                LOWER(TRIM(@setId))
+
+              OR
+
+              LOWER(TRIM(filter_set.name)) =
+                LOWER(TRIM(@setId))
+            )
+
+            AND
+
+            (
+              LOWER(TRIM(c.set_id)) =
+                LOWER(TRIM(filter_set.id))
+
+              OR
+
+              LOWER(TRIM(c.set_id)) =
+                LOWER(TRIM(filter_set.name))
+            )
+        )
+      )`
     );
 
     params.setId =
       setId;
   }
 
+
+  /*
+  ----------------------------------------------------------
+  RARITY FILTER
+  ----------------------------------------------------------
+  */
+
   if (rarity) {
     conditions.push(
-      `c.rarity = @rarity`
+      `LOWER(TRIM(c.rarity)) =
+       LOWER(TRIM(@rarity))`
     );
 
     params.rarity =
       rarity;
   }
 
+
+  /*
+  ----------------------------------------------------------
+  SUPERTYPE FILTER
+  ----------------------------------------------------------
+  */
+
   if (supertype) {
     conditions.push(
-      `c.supertype = @supertype`
+      `LOWER(TRIM(c.supertype)) =
+       LOWER(TRIM(@supertype))`
     );
 
     params.supertype =
       supertype;
   }
 
+
+  /*
+  ----------------------------------------------------------
+  TYPE FILTER
+  ----------------------------------------------------------
+  */
+
   if (type) {
     conditions.push(`
       EXISTS (
         SELECT 1
+
         FROM card_types ct
+
         WHERE ct.card_id = c.id
-          AND ct.type = @type
+
+          AND LOWER(TRIM(ct.type)) =
+              LOWER(TRIM(@type))
       )
     `);
 
     params.type =
       type;
   }
+
+
+  /*
+  ----------------------------------------------------------
+  WHERE CLAUSE
+  ----------------------------------------------------------
+  */
 
   const whereClause =
     conditions.length > 0
@@ -653,11 +781,19 @@ export function searchDatabaseCards(
         )}`
       : "";
 
+
+  /*
+  ----------------------------------------------------------
+  COUNT RESULTS
+  ----------------------------------------------------------
+  */
+
   const countRow =
     db
       .prepare(
         `
-        SELECT COUNT(*) AS count
+        SELECT
+          COUNT(*) AS count
 
         FROM cards c
 
@@ -694,6 +830,13 @@ export function searchDatabaseCards(
     (safePage - 1) *
     pageSize;
 
+
+  /*
+  ----------------------------------------------------------
+  GET CARDS
+  ----------------------------------------------------------
+  */
+
   const rows =
     db
       .prepare(
@@ -713,7 +856,14 @@ export function searchDatabaseCards(
         FROM cards c
 
         LEFT JOIN sets s
-          ON s.id = c.set_id
+          ON
+            LOWER(TRIM(s.id)) =
+            LOWER(TRIM(c.set_id))
+
+            OR
+
+            LOWER(TRIM(s.name)) =
+            LOWER(TRIM(c.set_id))
 
         ${whereClause}
 
@@ -730,13 +880,25 @@ export function searchDatabaseCards(
       )
       .all({
         ...params,
-        limit: pageSize,
+
+        limit:
+          pageSize,
+
         offset,
       });
 
+
+  /*
+  ----------------------------------------------------------
+  RETURN RESULT
+  ----------------------------------------------------------
+  */
+
   return {
     cards:
-      rows.map(rowToCard),
+      rows.map(
+        rowToCard
+      ),
 
     total,
 
@@ -783,7 +945,9 @@ export function getDatabaseSets(): DatabaseSet[] {
       )
       .all();
 
-  return rows.map(rowToSet);
+  return rows.map(
+    rowToSet
+  );
 }
 
 
@@ -792,7 +956,20 @@ export function getDatabaseSetById(
 ): DatabaseSet | null {
   const db = getDatabase();
 
-  const row =
+  const cleanId =
+    id?.trim() || "";
+
+  if (!cleanId) {
+    return null;
+  }
+
+  /*
+  ----------------------------------------------------------
+  TRY SET ID FIRST
+  ----------------------------------------------------------
+  */
+
+  let row =
     db
       .prepare(
         `
@@ -809,12 +986,53 @@ export function getDatabaseSetById(
 
         FROM sets
 
-        WHERE id = ?
+        WHERE
+          LOWER(TRIM(id)) =
+          LOWER(TRIM(?))
 
         LIMIT 1
         `
       )
-      .get(id);
+      .get(
+        cleanId
+      );
+
+
+  /*
+  ----------------------------------------------------------
+  FALL BACK TO SET NAME
+  ----------------------------------------------------------
+  */
+
+  if (!row) {
+    row =
+      db
+        .prepare(
+          `
+          SELECT
+            id,
+            name,
+            series,
+            printed_total,
+            total,
+            release_date,
+            updated_at,
+            symbol_image,
+            logo_image
+
+          FROM sets
+
+          WHERE
+            LOWER(TRIM(name)) =
+            LOWER(TRIM(?))
+
+          LIMIT 1
+          `
+        )
+        .get(
+          cleanId
+        );
+  }
 
   if (!row) {
     return null;
@@ -837,14 +1055,16 @@ export function getDatabaseRarities(): string[] {
     db
       .prepare(
         `
-        SELECT DISTINCT rarity
+        SELECT DISTINCT
+          rarity
 
         FROM cards
 
         WHERE rarity IS NOT NULL
           AND rarity != ''
 
-        ORDER BY rarity ASC
+        ORDER BY
+          rarity ASC
         `
       )
       .all() as Array<{
@@ -852,7 +1072,8 @@ export function getDatabaseRarities(): string[] {
       }>;
 
   return rows.map(
-    (row) => row.rarity
+    (row) =>
+      row.rarity
   );
 }
 
@@ -870,14 +1091,16 @@ export function getDatabaseTypes(): string[] {
     db
       .prepare(
         `
-        SELECT DISTINCT type
+        SELECT DISTINCT
+          type
 
         FROM card_types
 
         WHERE type IS NOT NULL
           AND type != ''
 
-        ORDER BY type ASC
+        ORDER BY
+          type ASC
         `
       )
       .all() as Array<{
@@ -885,7 +1108,8 @@ export function getDatabaseTypes(): string[] {
       }>;
 
   return rows.map(
-    (row) => row.type
+    (row) =>
+      row.type
   );
 }
 
@@ -903,14 +1127,16 @@ export function getDatabaseSupertypes(): string[] {
     db
       .prepare(
         `
-        SELECT DISTINCT supertype
+        SELECT DISTINCT
+          supertype
 
         FROM cards
 
         WHERE supertype IS NOT NULL
           AND supertype != ''
 
-        ORDER BY supertype ASC
+        ORDER BY
+          supertype ASC
         `
       )
       .all() as Array<{
@@ -918,7 +1144,8 @@ export function getDatabaseSupertypes(): string[] {
       }>;
 
   return rows.map(
-    (row) => row.supertype
+    (row) =>
+      row.supertype
   );
 }
 
@@ -956,7 +1183,8 @@ export function getRarestDatabaseCards(
         WHERE rarity IS NOT NULL
           AND rarity != ''
 
-        GROUP BY rarity
+        GROUP BY
+          rarity
 
         ORDER BY
           cnt ASC,
@@ -966,16 +1194,20 @@ export function getRarestDatabaseCards(
         `
       )
       .all({
-        limit: safeLimit,
+        limit:
+          safeLimit,
       }) as Array<{
         rarity: string;
         cnt: number;
       }>;
 
-  const cards: DatabaseCard[] = [];
+  const cards:
+    DatabaseCard[] = [];
 
   for (
-    const { rarity } of rarityRows
+    const {
+      rarity,
+    } of rarityRows
   ) {
     const row =
       db
@@ -996,11 +1228,21 @@ export function getRarestDatabaseCards(
           FROM cards c
 
           LEFT JOIN sets s
-            ON s.id = c.set_id
+            ON
+              LOWER(TRIM(s.id)) =
+              LOWER(TRIM(c.set_id))
 
-          WHERE c.rarity = @rarity
+              OR
+
+              LOWER(TRIM(s.name)) =
+              LOWER(TRIM(c.set_id))
+
+          WHERE
+            LOWER(TRIM(c.rarity)) =
+            LOWER(TRIM(@rarity))
 
             AND c.image_large IS NOT NULL
+
             AND c.image_large != ''
 
           ORDER BY
@@ -1371,10 +1613,14 @@ export function getPriceHistoryByRange(
             snapshot_date ASC
           `
         )
-        .all(cardId);
+        .all(
+          cardId
+        );
   } else {
     const startDate =
-      getDateDaysAgo(days);
+      getDateDaysAgo(
+        days
+      );
 
     rows =
       db
@@ -1688,11 +1934,6 @@ export function getPriceMovement(
       )
     );
 
-  /*
-  Use the latest recorded snapshot
-  as the reference point.
-  */
-
   const previousDate =
     (() => {
       const date =
@@ -1904,7 +2145,9 @@ export function getPriceHistorySummary(
         ) * 100
       ) / 100;
 
-    if (firstPrice !== 0) {
+    if (
+      firstPrice !== 0
+    ) {
       percentage =
         Math.round(
           (
@@ -1997,35 +2240,6 @@ export function getPriceHistoryCount(
 ============================================================
 BIGGEST PRICE MOVERS
 ============================================================
-
-Returns the cards with the largest percentage
-price increases and decreases for the selected
-period.
-
-The comparison is made between:
-
-  CURRENT
-    =
-  latest valid average snapshot
-
-and
-
-  PREVIOUS
-    =
-  closest valid average snapshot at or before
-  the requested number of days before the
-  current snapshot.
-
-This means cards are compared against their own
-latest snapshot date rather than today's date.
-
-Examples:
-
-  getBiggestPriceMovers(7, 5)
-  getBiggestPriceMovers(30, 5)
-  getBiggestPriceMovers(90, 5)
-  getBiggestPriceMovers(365, 5)
-============================================================
 */
 
 export type PriceMover = {
@@ -2054,12 +2268,6 @@ export function getBiggestPriceMovers(
 } {
   const db = getDatabase();
 
-  /*
-  ----------------------------------------------------------
-  SANITISE INPUT
-  ----------------------------------------------------------
-  */
-
   const safeDays =
     Math.max(
       1,
@@ -2082,39 +2290,8 @@ export function getBiggestPriceMovers(
       )
     );
 
-  /*
-  ----------------------------------------------------------
-  SQLite date modifier.
-
-  Example:
-    7   -> "-7 days"
-    30  -> "-30 days"
-    365 -> "-365 days"
-  ----------------------------------------------------------
-  */
-
   const dateOffset =
     `-${safeDays} days`;
-
-  /*
-  ----------------------------------------------------------
-  GET ALL MOVERS IN ONE QUERY
-  ----------------------------------------------------------
-
-  First find the latest valid average price for
-  every card.
-
-  Then find the closest valid historical price
-  at or before:
-
-    latest snapshot date - selected period
-
-  Finally join directly to cards and sets.
-
-  This avoids the previous N+1 query pattern where
-  every card required separate database queries.
-  ----------------------------------------------------------
-  */
 
   const rows =
     db
@@ -2151,12 +2328,6 @@ export function getBiggestPriceMovers(
           s.logo_image AS set_logo_image
 
         FROM (
-
-          /*
-          --------------------------------------------------
-          LATEST VALID PRICE FOR EACH CARD
-          --------------------------------------------------
-          */
 
           SELECT
             ph.card_id,
@@ -2201,16 +2372,6 @@ export function getBiggestPriceMovers(
         ) current_prices
 
         INNER JOIN (
-
-          /*
-          --------------------------------------------------
-          HISTORICAL PRICE FOR EACH CARD
-          --------------------------------------------------
-
-          The correlated subquery calculates the cutoff
-          using the card's own current snapshot date.
-          --------------------------------------------------
-          */
 
           SELECT
 
@@ -2313,8 +2474,14 @@ export function getBiggestPriceMovers(
 
         LEFT JOIN sets s
 
-          ON s.id =
-             c.set_id
+          ON
+            LOWER(TRIM(s.id)) =
+            LOWER(TRIM(c.set_id))
+
+            OR
+
+            LOWER(TRIM(s.name)) =
+            LOWER(TRIM(c.set_id))
         `
       )
       .all({
@@ -2329,13 +2496,8 @@ export function getBiggestPriceMovers(
         [key: string]: unknown;
       }>;
 
-  /*
-  ----------------------------------------------------------
-  CALCULATE MOVEMENTS
-  ----------------------------------------------------------
-  */
-
-  const movers: PriceMover[] = [];
+  const movers:
+    PriceMover[] = [];
 
   for (
     const row of rows
@@ -2415,12 +2577,10 @@ export function getBiggestPriceMovers(
     });
   }
 
+
   /*
   ----------------------------------------------------------
   BIGGEST GAINERS
-  ----------------------------------------------------------
-
-  Highest percentage increase first.
   ----------------------------------------------------------
   */
 
@@ -2440,12 +2600,10 @@ export function getBiggestPriceMovers(
         safeLimit
       );
 
+
   /*
   ----------------------------------------------------------
   BIGGEST LOSERS
-  ----------------------------------------------------------
-
-  Most negative percentage first.
   ----------------------------------------------------------
   */
 
@@ -2484,7 +2642,11 @@ export function getDatabaseStats() {
   const cards =
     db
       .prepare(
-        `SELECT COUNT(*) AS count FROM cards`
+        `
+        SELECT
+          COUNT(*) AS count
+        FROM cards
+        `
       )
       .get() as {
         count: number;
@@ -2493,7 +2655,11 @@ export function getDatabaseStats() {
   const sets =
     db
       .prepare(
-        `SELECT COUNT(*) AS count FROM sets`
+        `
+        SELECT
+          COUNT(*) AS count
+        FROM sets
+        `
       )
       .get() as {
         count: number;
@@ -2503,7 +2669,8 @@ export function getDatabaseStats() {
     db
       .prepare(
         `
-        SELECT COUNT(DISTINCT rarity) AS count
+        SELECT
+          COUNT(DISTINCT rarity) AS count
 
         FROM cards
 
@@ -2519,7 +2686,8 @@ export function getDatabaseStats() {
     db
       .prepare(
         `
-        SELECT COUNT(DISTINCT type) AS count
+        SELECT
+          COUNT(DISTINCT type) AS count
 
         FROM card_types
 
@@ -2535,7 +2703,8 @@ export function getDatabaseStats() {
     db
       .prepare(
         `
-        SELECT COUNT(*) AS count
+        SELECT
+          COUNT(*) AS count
 
         FROM price_history
         `

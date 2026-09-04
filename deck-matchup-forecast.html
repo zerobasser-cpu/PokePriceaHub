@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deck Matchup Forecast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #12141d;
+    --bg-header: #0e1017;
+    --panel: #1a1d2b;
+    --panel-border: #2a2e42;
+    --panel-border-soft: #23263636;
+    --text: #edeff6;
+    --text-dim: #a2a7bd;
+    --text-faint: #6b7086;
+    --accent-neutral: #8a8fa3;
+    --radius-card: 10px;
+    --radius-sm: 6px;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+
+    --c-fire: #e2603a;
+    --c-water: #4a90d9;
+    --c-grass: #5c9e52;
+    --c-lightning: #dcc239;
+    --c-psychic: #ac6fce;
+    --c-fighting: #bd6f3e;
+    --c-darkness: #7b7690;
+    --c-metal: #9aa5b1;
+    --c-fairy: #e08bc0;
+    --c-dragon: #7c76e8;
+    --c-colorless: #b9b4a4;
+    --c-neutral: #7d84a3;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    padding: 28px 18px 64px;
+  }
+
+  @media (min-width: 720px) {
+    body { padding: 48px 32px 80px; }
+  }
+
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+  }
+
+  header.page-head {
+    margin-bottom: 28px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--panel-border);
+    position: relative;
+  }
+
+  header.page-head::before {
+    content: "";
+    position: absolute;
+    inset: -14px -18px auto auto;
+    top: -14px;
+    right: -8px;
+    width: 120px;
+    height: 90px;
+    background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 9px);
+    pointer-events: none;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 28px;
+    line-height: 1.15;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  @media (min-width: 600px) {
+    h1 { font-size: 34px; }
+  }
+
+  .subhead {
+    color: var(--text-dim);
+    font-size: 15px;
+    line-height: 1.5;
+    max-width: 54ch;
+    margin: 0;
+  }
+
+  .input-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  @media (min-width: 680px) {
+    .input-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .deck-panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-card);
+    padding: 14px;
+    border-top: 3px solid var(--deck-color, var(--c-neutral));
+    transition: border-top-color 0.2s ease;
+  }
+
+  .deck-panel label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-bottom: 6px;
+  }
+
+  .deck-panel input[type="text"] {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--panel-border);
+    color: var(--text);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 17px;
+    padding: 2px 0 8px;
+    margin-bottom: 12px;
+    outline: none;
+  }
+
+  .deck-panel input[type="text"]:focus {
+    border-bottom-color: var(--deck-color, var(--accent-neutral));
+  }
+
+  .deck-panel textarea {
+    width: 100%;
+    min-height: 220px;
+    resize: vertical;
+    background: #14161f;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    padding: 10px;
+    outline: none;
+  }
+
+  .deck-panel textarea:focus {
+    border-color: var(--deck-color, var(--accent-neutral));
+  }
+
+  .deck-panel textarea::placeholder {
+    color: var(--text-faint);
+  }
+
+  .panel-footline {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    min-height: 18px;
+  }
+
+  .count-readout {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-faint);
+  }
+
+  .count-readout.warn { color: #e2a13a; }
+
+  .actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  button {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 14.5px;
+    border-radius: var(--radius-sm);
+    padding: 11px 20px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: transform 0.08s ease, filter 0.15s ease;
+  }
+
+  button:active { transform: translateY(1px); }
+
+  #forecastBtn {
+    background: var(--text);
+    color: #14161f;
+  }
+
+  #forecastBtn:hover { filter: brightness(0.92); }
+
+  #forecastBtn:disabled {
+    background: var(--panel-border);
+    color: var(--text-faint);
+    cursor: default;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--panel-border);
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 10px 16px;
+  }
+
+  .btn-ghost:hover { border-color: var(--text-faint); color: var(--text); }
+
+  .error-line {
+    color: #e2734a;
+    font-size: 13px;
+    margin: 4px 0 0;
+    min-height: 16px;
+  }
+
+  /* ---- results ---- */
+
+  #results {
+    margin-top: 34px;
+    opacity: 0;
+    transform: translateY(10px);
+    max-height: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+  }
+
+  #results.visible {
+    opacity: 1;
+    transform: none;
+    max-height: none;
+    overflow: visible;
+    pointer-events: auto;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .verdict-block {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-card);
+    padding: 22px 18px;
+    margin-bottom: 22px;
+  }
+
+  .verdict-labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .verdict-pct {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .favored-badge {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+    background: var(--deck-color, var(--c-neutral));
+    color: #14161f;
+  }
+
+  .verdict-bar {
+    height: 22px;
+    border-radius: 999px;
+    overflow: hidden;
+    display: flex;
+    background: #14161f;
+    border: 1px solid var(--panel-border);
+  }
+
+  .verdict-bar .seg {
+    height: 100%;
+    transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .verdict-sentence {
+    margin-top: 16px;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text);
+  }
+
+  .verdict-sentence strong { font-weight: 600; }
+
+  .cat-section { margin-bottom: 22px; }
+
+  .matchup-notes {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-card);
+    padding: 16px 18px;
+    margin-bottom: 22px;
+  }
+
+  .matchup-notes-heading {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14.5px;
+    margin: 0 0 12px;
+  }
+
+  .matchup-note-item {
+    padding-left: 12px;
+    border-left: 2px solid var(--accent-neutral);
+    margin-bottom: 12px;
+    opacity: 0;
+    animation: fadeInUp 0.4s ease forwards;
+  }
+
+  .matchup-note-item:last-child { margin-bottom: 0; }
+
+  .matchup-note-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 3px;
+  }
+
+  .matchup-note-detail {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .cat-row {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .cat-row:last-child { border-bottom: none; }
+
+  .cat-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14.5px;
+    margin-bottom: 8px;
+  }
+
+  .cat-bar {
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    display: flex;
+    background: #14161f;
+    margin-bottom: 8px;
+  }
+
+  .cat-bar .seg { height: 100%; transition: width 0.6s ease; }
+
+  .cat-note {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .comp-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+
+  @media (min-width: 680px) {
+    .comp-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .comp-panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-card);
+    padding: 14px 16px;
+    border-top: 3px solid var(--deck-color, var(--c-neutral));
+  }
+
+  .comp-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 15px;
+    margin: 0 0 10px;
+  }
+
+  .comp-counts {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .comp-counts b { color: var(--text); font-weight: 600; }
+
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .chip {
+    font-size: 11.5px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #14161f;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+  }
+
+  .suggest-block {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--panel-border);
+  }
+
+  .suggest-heading {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    margin: 0 0 10px;
+  }
+
+  .suggest-item {
+    padding-left: 10px;
+    border-left: 2px solid var(--deck-color, var(--c-neutral));
+    margin-bottom: 10px;
+    opacity: 0;
+    animation: fadeInUp 0.4s ease forwards;
+  }
+
+  .suggest-item:last-child { margin-bottom: 0; }
+
+  .suggest-item-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 2px;
+  }
+
+  .suggest-item-detail {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .suggest-empty {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin: 0;
+  }
+
+  details.methodology {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-card);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+  }
+
+  details.methodology summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    list-style: none;
+  }
+
+  details.methodology summary::-webkit-details-marker { display: none; }
+
+  details.methodology summary::before {
+    content: "+ ";
+    color: var(--text-faint);
+  }
+
+  details.methodology[open] summary::before {
+    content: "\2212 ";
+  }
+
+  details.methodology .meth-body {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  details.methodology .meth-body p { margin: 0 0 10px; }
+  details.methodology .meth-body p:last-child { margin-bottom: 0; }
+
+  .disclaimer {
+    margin-top: 26px;
+    font-size: 12.5px;
+    color: var(--text-faint);
+    line-height: 1.6;
+    border-top: 1px solid var(--panel-border);
+    padding-top: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <h1>Deck Matchup Forecast</h1>
+    <p class="subhead">Paste two decklists. Get a heuristic read on who's favored, and why — based on each deck's consistency engine, offensive profile, and strategic focus.</p>
+  </header>
+
+  <div class="input-grid">
+    <div class="deck-panel" id="panelA">
+      <label for="nameA">Deck A name</label>
+      <input type="text" id="nameA" placeholder="Deck A" maxlength="40">
+      <label for="listA">Decklist</label>
+      <textarea id="listA" placeholder="2 Charizard ex OBF 125&#10;4 Rare Candy&#10;3 Professor's Research&#10;&#8230;&#10;paste your full 60-card list here"></textarea>
+      <div class="panel-footline">
+        <span class="count-readout" id="countA">0 cards</span>
+      </div>
+    </div>
+
+    <div class="deck-panel" id="panelB">
+      <label for="nameB">Deck B name</label>
+      <input type="text" id="nameB" placeholder="Deck B" maxlength="40">
+      <label for="listB">Decklist</label>
+      <textarea id="listB" placeholder="4 Miraidon ex&#10;4 Iron Hands ex&#10;2 Boss's Orders&#10;&#8230;&#10;paste your full 60-card list here"></textarea>
+      <div class="panel-footline">
+        <span class="count-readout" id="countB">0 cards</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions-row">
+    <button id="forecastBtn">Forecast the matchup</button>
+    <button class="btn-ghost" id="exampleBtn">Load example decks</button>
+    <button class="btn-ghost" id="clearBtn">Clear</button>
+  </div>
+  <p class="error-line" id="errorLine"></p>
+
+  <div id="results">
+    <div class="verdict-block">
+      <div class="verdict-labels">
+        <span id="verdictNameA">Deck A</span>
+        <span id="verdictNameB">Deck B</span>
+      </div>
+      <div class="verdict-bar">
+        <div class="seg" id="segA"></div>
+        <div class="seg" id="segB"></div>
+      </div>
+      <div class="verdict-labels" style="margin-top:6px;">
+        <span class="verdict-pct" id="pctA"></span>
+        <span class="verdict-pct" id="pctB"></span>
+      </div>
+      <p class="verdict-sentence" id="verdictSentence"></p>
+    </div>
+
+    <div class="matchup-notes" id="matchupNotes"></div>
+
+    <div class="cat-section" id="catSection"></div>
+
+    <div class="comp-grid" id="compGrid"></div>
+
+    <details class="methodology">
+      <summary>How this forecast is calculated</summary>
+      <div class="meth-body">
+        <p>This tool reads card names and counts only — it has no knowledge of attack damage, HP, abilities, or how specific cards interact. It scores three things it can actually infer from a list: how much of the deck is dedicated to drawing and searching for cards (consistency), how much of the Pokémon lineup is made up of multi-prize attackers like ex, V, VMAX, VSTAR, or GX cards (offensive power, which is also a prize-giveaway risk), and how concentrated the attacker lineup is around a small core versus spread across many one-ofs (focus).</p>
+        <p>Those three scores are weighted and compared to produce a percentage split. It is not a game simulation, and it can't account for type matchups, specific tech counters, or the skill of either player.</p>
+        <p>The suggested additions under each deck come from the same rule-based checks — flagging things like a thin Supporter line, no bench-hitting Trainer card, or no way to recover from a retreat cost — compared against what's already in the list. They're generic structural gaps, not picks tailored to your specific matchup or format.</p>
+        <p>Suggested cards are chosen to reflect the Standard format following the April 2026 rotation, to the best of publicly available information as of this tool's last update. Exact tournament legality depends on a card's specific printing (its regulation mark), so double-check any suggestion against the official Pok\u00e9mon TCG card database before adding it to a tournament deck.</p>
+      </div>
+    </details>
+
+    <p class="disclaimer">This is a heuristic estimate, not a match simulation. Real outcomes depend on draw order, sequencing, prize trades, and player decisions — treat this as deck-building feedback, not a prediction of what will actually happen on the table.</p>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var TYPE_KEYWORDS = {
+    fire: /\bfire\b/i,
+    water: /\bwater\b/i,
+    grass: /\bgrass\b/i,
+    lightning: /\blightning\b/i,
+    psychic: /\bpsychic\b/i,
+    fighting: /\bfighting\b/i,
+    darkness: /\bdarkness\b/i,
+    metal: /\bmetal\b/i,
+    fairy: /\bfairy\b/i,
+    dragon: /\bdragon\b/i,
+    colorless: /\bcolorless\b/i
+  };
+
+  var TYPE_COLOR_VAR = {
+    fire: '--c-fire', water: '--c-water', grass: '--c-grass',
+    lightning: '--c-lightning', psychic: '--c-psychic', fighting: '--c-fighting',
+    darkness: '--c-darkness', metal: '--c-metal', fairy: '--c-fairy',
+    dragon: '--c-dragon', colorless: '--c-colorless'
+  };
+
+  var SUPPORTERS = [
+    "professor's research","professor sycamore","professor oak","professor turo","professor sada",
+    "boss's orders","iono","judge","n ","colress","cynthia","marnie","bianca","cheren","lillie",
+    "guzma","lysandre","erika's hospitality","roxanne","arven","penny","irida","melony",
+    "team yell grunt","klara","avery","raihan","mustard","peonia","brock's","hop","volo",
+    "acerola","hala","kukui","hau","gladion","larry","grusha","geeta","larry's","jasmine",
+    "crispin","carmine","kieran","atticus","brassius","juniper","briar","lillie's determination",
+    "lillie's pearl","n's "
+  ];
+
+  var SEARCH_ITEMS = [
+    "ultra ball","quick ball","nest ball","level ball","great ball","dive ball","heavy ball",
+    "buddy-buddy poffin","evolution incense","poke ball","master ball","luxury ball","friend ball",
+    "battle vip pass","dusk ball"
+  ];
+
+  var UTILITY_ITEMS = [
+    "switch","escape rope","escape board","ordinary rod","super rod","energy retrieval",
+    "energy search","choice belt","air balloon","float stone","fog crystal","forest seal stone",
+    "counter catcher","counter gain","pal pad","trekking shoes","technical machine","vitality band",
+    "exp. share","big charm","defiance band","rescue board","enriching energy","wondrous patch",
+    "unfair stamp","survival brace","neutralization zone","awakening drum","maximum belt",
+    "secret box","prime catcher"
+  ];
+
+  var STADIUMS = [
+    "path to the peak","collapsed stadium","training court","lost city","temple of sinnoh",
+    "pokestop","pok\u00e9stop","artazon","town store","jamming tower","area zero underdepths"
+  ];
+
+  var RARE_CANDY = "rare candy";
+
+  var ALL_TRAINER_KEYWORDS = SUPPORTERS.concat(SEARCH_ITEMS, UTILITY_ITEMS, STADIUMS, [RARE_CANDY]);
+
+  // Curated pools used only for "suggested additions" — kept intentionally smaller
+  // than the classification lists above, and limited to cards understood to be
+  // Standard-legal following the April 2026 (G regulation mark) rotation.
+  var RECOMMEND_SUPPORTERS = ["lillie's determination", "briar"];
+  var RECOMMEND_SEARCH = ["ultra ball", "buddy-buddy poffin", "dusk ball"];
+  var RECOMMEND_GUST = ["boss's orders"];
+  var RECOMMEND_RECOVERY = ["super rod", "ordinary rod"];
+  var RECOMMEND_RETREAT_AID = ["switch", "float stone", "air balloon"];
+  var RECOMMEND_STADIUM = ["area zero underdepths"];
+  var RECOMMEND_TOOLS = ["choice belt", "vitality band", "big charm", "defiance band"];
+  var ALL_TOOL_KEYWORDS = RECOMMEND_TOOLS.concat(["float stone", "air balloon", "exp. share", "technical machine", "rescue board"]);
+  var ACE_SPECS = ["unfair stamp", "survival brace", "neutralization zone", "awakening drum", "maximum belt", "secret box", "prime catcher"];
+
+  var els = {};
+  ["listA","listB","nameA","nameB","countA","countB","forecastBtn","exampleBtn","clearBtn",
+   "errorLine","results","verdictNameA","verdictNameB","segA","segB","pctA","pctB",
+   "verdictSentence","matchupNotes","catSection","compGrid","panelA","panelB"].forEach(function (id) {
+    els[id] = document.getElementById(id);
+  });
+
+  function stripSetCode(str) {
+    return str.replace(/\s+[A-Z]{2,5}(?:-[A-Z]{2,3})?\s+\d{1,3}[a-zA-Z]?$/,'')
+              .replace(/\s+\d{1,3}\/\d{1,3}$/,'')
+              .trim();
+  }
+
+  function parseDecklist(text) {
+    var lines = text.split(/\r?\n/);
+    var section = null;
+    var entries = [];
+    var warnings = [];
+
+    lines.forEach(function (raw) {
+      var line = raw.trim();
+      if (!line) return;
+
+      var headerMatch = line.match(/^(pok[eé]mon|trainer|trainers|energy)\s*:?\s*(\d+)?\s*$/i);
+      if (headerMatch) {
+        var h = headerMatch[1].toLowerCase();
+        section = h.indexOf('pok') === 0 ? 'pokemon' : (h.indexOf('energy') === 0 ? 'energy' : 'trainer');
+        return;
+      }
+      if (/^total\s*cards?/i.test(line)) return;
+
+      var m = line.match(/^(\d+)\s*x?\s+(.+)$/i);
+      var count, name;
+      if (m) {
+        count = parseInt(m[1], 10);
+        name = m[2];
+      } else {
+        var mTrail = line.match(/^(.+?)\s+x\s*(\d+)$/i);
+        if (mTrail) {
+          name = mTrail[1];
+          count = parseInt(mTrail[2], 10);
+        } else {
+          count = 1;
+          name = line;
+        }
+      }
+
+      var cleanName = stripSetCode(name);
+      var lowerName = cleanName.toLowerCase();
+
+      var category = section;
+      if (!category) {
+        if (/\benergy\b/i.test(cleanName) && !/energy\s*(v|ex|vmax)/i.test(cleanName)) {
+          category = 'energy';
+        } else {
+          var isKnownTrainer = ALL_TRAINER_KEYWORDS.some(function (k) {
+            return lowerName.indexOf(k) !== -1;
+          });
+          category = isKnownTrainer ? 'trainer' : 'pokemon';
+        }
+      }
+
+      entries.push({ count: count, name: cleanName, lowerName: lowerName, category: category });
+    });
+
+    return { entries: entries, warnings: warnings };
+  }
+
+  function computeMetrics(parsed) {
+    var pokemon = [], trainer = [], energy = [];
+    var total = 0;
+    parsed.entries.forEach(function (e) {
+      total += e.count;
+      if (e.category === 'pokemon') pokemon.push(e);
+      else if (e.category === 'trainer') trainer.push(e);
+      else energy.push(e);
+    });
+
+    var pokemonCount = pokemon.reduce(function (s, e) { return s + e.count; }, 0);
+    var trainerCount = trainer.reduce(function (s, e) { return s + e.count; }, 0);
+    var energyCount = energy.reduce(function (s, e) { return s + e.count; }, 0);
+
+    var supporterCopies = 0, searchCopies = 0, utilityCopies = 0, hasRareCandy = false;
+    var recognizedChips = [];
+    trainer.forEach(function (e) {
+      var isSupporter = SUPPORTERS.some(function (k) { return e.lowerName.indexOf(k) !== -1; });
+      var isSearch = SEARCH_ITEMS.some(function (k) { return e.lowerName.indexOf(k) !== -1; });
+      var isUtility = UTILITY_ITEMS.some(function (k) { return e.lowerName.indexOf(k) !== -1; });
+      var isCandy = e.lowerName.indexOf(RARE_CANDY) !== -1;
+      if (isSupporter) { supporterCopies += e.count; recognizedChips.push(e.name); }
+      if (isSearch) { searchCopies += e.count; recognizedChips.push(e.name); }
+      if (isUtility) utilityCopies += e.count;
+      if (isCandy) { hasRareCandy = true; recognizedChips.push(e.name); }
+    });
+
+    var bigAttackerCopies = 0;
+    var uniquePokemonNames = {};
+    pokemon.forEach(function (e) {
+      uniquePokemonNames[e.lowerName] = true;
+      if (/\b(ex|v|vmax|vstar|gx|break)\b/i.test(e.name)) {
+        bigAttackerCopies += e.count;
+      }
+    });
+    var uniqueCount = Object.keys(uniquePokemonNames).length;
+
+    var typeCounts = {};
+    energy.forEach(function (e) {
+      Object.keys(TYPE_KEYWORDS).forEach(function (t) {
+        if (TYPE_KEYWORDS[t].test(e.lowerName)) {
+          typeCounts[t] = (typeCounts[t] || 0) + e.count;
+        }
+      });
+    });
+    var dominantType = null, dominantMax = 0;
+    Object.keys(typeCounts).forEach(function (t) {
+      if (typeCounts[t] > dominantMax) { dominantMax = typeCounts[t]; dominantType = t; }
+    });
+
+    var consistencyRaw = supporterCopies * 2 + searchCopies * 1.2 + utilityCopies * 0.6 + (hasRareCandy ? 2 : 0);
+    var offenseRatio = pokemonCount > 0 ? bigAttackerCopies / pokemonCount : 0;
+    var focusRatio = pokemonCount > 0 ? 1 - (uniqueCount / pokemonCount) : 0;
+
+    return {
+      total: total, pokemonCount: pokemonCount, trainerCount: trainerCount, energyCount: energyCount,
+      supporterCopies: supporterCopies, searchCopies: searchCopies, hasRareCandy: hasRareCandy,
+      bigAttackerCopies: bigAttackerCopies, uniqueCount: uniqueCount,
+      consistencyRaw: consistencyRaw, offenseRatio: offenseRatio, focusRatio: focusRatio,
+      dominantType: dominantType, chips: recognizedChips.slice(0, 6),
+      trainerEntries: trainer
+    };
+  }
+
+  function hasKeyword(trainerEntries, keywords) {
+    return trainerEntries.some(function (e) {
+      return keywords.some(function (k) { return e.lowerName.indexOf(k) !== -1; });
+    });
+  }
+
+  function generateSuggestions(met) {
+    var suggestions = [];
+    var trainerEntries = met.trainerEntries;
+
+    if (met.total !== 60) {
+      suggestions.push({
+        title: met.total < 60 ? 'Deck is under 60 cards' : 'Deck is over 60 cards',
+        detail: 'Counted ' + met.total + ' cards. Standard deck construction requires exactly 60 — fill out or trim the list before relying on this forecast.'
+      });
+    }
+
+    if (met.energyCount > 0 && (met.energyCount < 7 || met.energyCount > 18)) {
+      suggestions.push({
+        title: met.energyCount < 7 ? 'Energy count looks light' : 'Energy count looks heavy',
+        detail: met.energyCount + ' Energy card' + (met.energyCount === 1 ? '' : 's') + ' is ' +
+          (met.energyCount < 7 ? 'below' : 'above') + ' the 8\u201316 range most decks land in \u2014 worth double-checking attacks stay consistently affordable.'
+      });
+    }
+
+    if (met.supporterCopies < 6) {
+      var missingDraw = RECOMMEND_SUPPORTERS.filter(function (k) { return !hasKeyword(trainerEntries, [k]); });
+      if (missingDraw.length) {
+        suggestions.push({
+          title: 'Add more draw Supporters',
+          detail: 'Only ' + met.supporterCopies + ' recognized Supporter cop' + (met.supporterCopies === 1 ? 'y' : 'ies') +
+            ' found. ' + capitalizeList(missingDraw) + ' would help see more of the deck each turn.'
+        });
+      }
+    }
+
+    if (met.searchCopies < 4) {
+      var missingSearch = RECOMMEND_SEARCH.filter(function (k) { return !hasKeyword(trainerEntries, [k]); });
+      if (missingSearch.length) {
+        suggestions.push({
+          title: 'Add more Pok\u00e9mon search',
+          detail: 'Only ' + met.searchCopies + ' search item' + (met.searchCopies === 1 ? '' : 's') +
+            ' found. ' + capitalizeList(missingSearch) + ' would help find key attackers faster.'
+        });
+      }
+    }
+
+    if (!hasKeyword(trainerEntries, ALL_TOOL_KEYWORDS)) {
+      var missingTools = RECOMMEND_TOOLS.filter(function (k) { return !hasKeyword(trainerEntries, [k]); });
+      suggestions.push({
+        title: 'Add a Pok\u00e9mon Tool',
+        detail: 'No Tool card found. ' + capitalizeList(missingTools) + ' can add damage, bulk, or utility for a single card slot.'
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, RECOMMEND_GUST)) {
+      suggestions.push({
+        title: 'Add a way to reach the bench',
+        detail: "No Boss's Orders found. Without a gust effect, this deck can struggle to close out games against a spread-out board."
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, RECOMMEND_RETREAT_AID.concat(["escape rope", "escape board"]))) {
+      suggestions.push({
+        title: 'Add a retreat aid',
+        detail: 'No Switch, Float Stone, or similar found. Getting stuck behind a retreat cost can cost a turn at a critical moment.'
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, RECOMMEND_RECOVERY)) {
+      suggestions.push({
+        title: 'Add late-game recovery',
+        detail: 'No Super Rod or Ordinary Rod found. A recovery card keeps the deck running once early copies of key Pok\u00e9mon and Energy are used up.'
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, RECOMMEND_STADIUM.concat(STADIUMS))) {
+      suggestions.push({
+        title: 'Consider a Stadium',
+        detail: 'No Stadium card found. Area Zero Underdepths is a current staple worth testing if the deck wants extra Bench space or a consistency boost.'
+      });
+    }
+
+    if (!hasKeyword(trainerEntries, ACE_SPECS) && met.supporterCopies < 6) {
+      suggestions.push({
+        title: 'Consider an ACE SPEC',
+        detail: "No ACE SPEC card found (only one is allowed per deck). With Iono rotated out of Standard, a card like Unfair Stamp is worth testing as a disruption option \u2014 check current legality and whether it fits this deck's plan first."
+      });
+    }
+
+    if (met.pokemonCount > 0 && met.offenseRatio > 0.75) {
+      suggestions.push({
+        title: 'Heavy on multi-prize attackers',
+        detail: 'Most of the Pok\u00e9mon lineup gives up two prizes on knockout. A cheap single-prize attacker can help claw back a prize race this deck falls behind on.'
+      });
+    }
+
+    return suggestions.slice(0, 5);
+  }
+
+  function capitalizeList(keywords) {
+    return keywords.slice(0, 2).map(function (k) {
+      return k.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    }).join(' or ');
+  }
+
+  function generateMatchupNotes(nameA, consA, offA, focA, nameB, consB, offB, focB) {
+    var notes = [];
+
+    if (Math.abs(consA - consB) > 2.5) {
+      var laggingCons = consA < consB ? nameA : nameB;
+      var leadingCons = consA < consB ? nameB : nameA;
+      notes.push({
+        title: 'Consistency gap',
+        detail: laggingCons + "'s engine lags noticeably behind " + leadingCons + "'s. Expect to lean harder on early Supporters and searches to keep pace and avoid falling behind on board development."
+      });
+    }
+
+    if (Math.abs(offA - offB) > 2.5) {
+      var highOffense = offA >= offB ? nameA : nameB;
+      var lowOffense = offA >= offB ? nameB : nameA;
+      notes.push({
+        title: 'Prize-trade asymmetry',
+        detail: highOffense + ' gives up two prizes on most knockouts, while ' + lowOffense + ' mostly gives up one. ' +
+          lowOffense + ' can afford to trade evenly; ' + highOffense + ' needs to close the game out before the prize count catches up.'
+      });
+    }
+
+    if (Math.abs(focA - focB) > 2.5) {
+      var moreFocused = focA >= focB ? nameA : nameB;
+      var moreSpread = focA >= focB ? nameB : nameA;
+      notes.push({
+        title: 'Focused plan vs. toolbox',
+        detail: moreFocused + "'s attackers are concentrated around a small core, which is consistent but predictable. " +
+          moreSpread + "'s wider lineup may already carry an answer built in \u2014 " + moreFocused + ' should expect to see it.'
+      });
+    }
+
+    return notes.slice(0, 3);
+  }
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function splitFromDiff(diff, scale) {
+    var pctA = 50 + clamp(diff * scale, -30, 30);
+    return { a: Math.round(pctA), b: Math.round(100 - pctA) };
+  }
+
+  function renderChips(container, chips) {
+    if (!chips.length) return;
+    var row = document.createElement('div');
+    row.className = 'chip-row';
+    var seen = {};
+    chips.forEach(function (c) {
+      if (seen[c]) return;
+      seen[c] = true;
+      var chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = c;
+      row.appendChild(chip);
+    });
+    container.appendChild(row);
+  }
+
+  function colorFor(type) {
+    if (type && TYPE_COLOR_VAR[type]) {
+      return 'var(' + TYPE_COLOR_VAR[type] + ')';
+    }
+    return 'var(--c-neutral)';
+  }
+
+  function updateCount(textareaId, countElId) {
+    var parsed = parseDecklist(els[textareaId].value);
+    var total = parsed.entries.reduce(function (s, e) { return s + e.count; }, 0);
+    var el = els[countElId];
+    el.textContent = total + ' card' + (total === 1 ? '' : 's');
+    el.className = 'count-readout' + (total > 0 && total !== 60 ? ' warn' : '');
+    if (total > 0 && total !== 60) {
+      el.textContent += ' (expected 60)';
+    }
+  }
+
+  els.listA.addEventListener('input', function () { updateCount('listA', 'countA'); });
+  els.listB.addEventListener('input', function () { updateCount('listB', 'countB'); });
+
+  function runForecast() {
+    els.errorLine.textContent = '';
+    var textA = els.listA.value.trim();
+    var textB = els.listB.value.trim();
+
+    if (!textA || !textB) {
+      els.errorLine.textContent = 'Paste both decklists before running a forecast.';
+      return;
+    }
+
+    var nameA = els.nameA.value.trim() || 'Deck A';
+    var nameB = els.nameB.value.trim() || 'Deck B';
+
+    var parsedA = parseDecklist(textA);
+    var parsedB = parseDecklist(textB);
+    var metA = computeMetrics(parsedA);
+    var metB = computeMetrics(parsedB);
+
+    if (metA.pokemonCount === 0 || metB.pokemonCount === 0) {
+      els.errorLine.textContent = "Couldn't find any Pok\u00e9mon cards in one of the lists — check the paste and try again.";
+      return;
+    }
+
+    var colorA = colorFor(metA.dominantType);
+    var colorB = colorFor(metB.dominantType);
+    els.panelA.style.setProperty('--deck-color', colorA);
+    els.panelB.style.setProperty('--deck-color', colorB);
+
+    var maxConsistency = Math.max(metA.consistencyRaw, metB.consistencyRaw, 1);
+    var consA = (metA.consistencyRaw / maxConsistency) * 10;
+    var consB = (metB.consistencyRaw / maxConsistency) * 10;
+
+    var offA = metA.offenseRatio * 10;
+    var offB = metB.offenseRatio * 10;
+
+    var focA = metA.focusRatio * 10;
+    var focB = metB.focusRatio * 10;
+
+    var weightedA = consA * 0.42 + offA * 0.33 + focA * 0.25;
+    var weightedB = consB * 0.42 + offB * 0.33 + focB * 0.25;
+    var overall = splitFromDiff(weightedA - weightedB, 3.2);
+
+    els.verdictNameA.textContent = nameA;
+    els.verdictNameB.textContent = nameB;
+    els.segA.style.width = overall.a + '%';
+    els.segB.style.width = overall.b + '%';
+    els.segA.style.background = colorA;
+    els.segB.style.background = colorB;
+    els.pctA.textContent = overall.a + '%';
+    els.pctB.textContent = overall.b + '%';
+
+    var leader = overall.a >= overall.b ? { name: nameA, pct: overall.a, color: colorA } : { name: nameB, pct: overall.b, color: colorB };
+    var margin = Math.abs(overall.a - overall.b);
+
+    if (margin >= 4) {
+      var badgeTarget = overall.a >= overall.b ? els.verdictNameA : els.verdictNameB;
+      var badge = document.createElement('span');
+      badge.className = 'favored-badge';
+      badge.style.setProperty('--deck-color', leader.color);
+      badge.textContent = 'Favored';
+      badgeTarget.appendChild(badge);
+    }
+
+    var gaps = [
+      { label: 'a deeper consistency engine', diff: consA - consB, dir: consA >= consB ? nameA : nameB },
+      { label: 'a heavier multi-prize attacker package', diff: offA - offB, dir: offA >= offB ? nameA : nameB },
+      { label: 'a more focused attacker lineup', diff: focA - focB, dir: focA >= focB ? nameA : nameB }
+    ];
+    gaps.sort(function (x, y) { return Math.abs(y.diff) - Math.abs(x.diff); });
+    var topReasons = gaps.filter(function (g) { return g.dir === leader.name; }).slice(0, 1);
+    var reasonText = topReasons.length ? topReasons[0].label : 'a slight overall edge across the board';
+
+    var sentence;
+    if (margin < 6) {
+      sentence = '<strong>' + nameA + '</strong> and <strong>' + nameB + '</strong> look close to even on paper — this one likely comes down to draws and sequencing more than deck construction.';
+    } else {
+      sentence = '<strong>' + leader.name + '</strong> is favored, projected around <strong>' + leader.pct + '%</strong>, largely on the strength of ' + reasonText + '.';
+    }
+    els.verdictSentence.innerHTML = sentence;
+
+    els.matchupNotes.innerHTML = '';
+    var matchupNoteList = generateMatchupNotes(nameA, consA, offA, focA, nameB, consB, offB, focB);
+    if (matchupNoteList.length) {
+      var mHeading = document.createElement('p');
+      mHeading.className = 'matchup-notes-heading';
+      mHeading.textContent = 'Head-to-head considerations';
+      els.matchupNotes.appendChild(mHeading);
+      matchupNoteList.forEach(function (n, i) {
+        var item = document.createElement('div');
+        item.className = 'matchup-note-item';
+        item.style.animationDelay = (i * 70) + 'ms';
+        item.innerHTML = '<p class="matchup-note-title">' + n.title + '</p><p class="matchup-note-detail">' + n.detail + '</p>';
+        els.matchupNotes.appendChild(item);
+      });
+      els.matchupNotes.style.display = 'block';
+    } else {
+      els.matchupNotes.style.display = 'none';
+    }
+
+    els.catSection.innerHTML = '';
+    var cats = [
+      { name: 'Consistency engine', a: consA, b: consB,
+        note: 'Draw Supporters, search items, and Rare Candy relative to deck size — the resources that keep hands from stalling out.' },
+      { name: 'Offensive power (and prize risk)', a: offA, b: offB,
+        note: 'Share of the Pok\u00e9mon lineup made up of ex, V, VMAX, VSTAR, GX, or BREAK cards. Bigger hits, but each KO gives up more prizes.' },
+      { name: 'Strategic focus', a: focA, b: focB,
+        note: 'How concentrated the attacker lineup is around a small core versus spread thin across one-of techs.' }
+    ];
+    cats.forEach(function (c) {
+      var maxVal = Math.max(c.a, c.b, 0.01);
+      var wA = (c.a / (c.a + c.b || 1)) * 100;
+      var wB = 100 - wA;
+      var row = document.createElement('div');
+      row.className = 'cat-row';
+      row.innerHTML =
+        '<div class="cat-name">' + c.name + '</div>' +
+        '<div class="cat-bar">' +
+          '<div class="seg" style="width:' + wA + '%; background:' + colorA + ';"></div>' +
+          '<div class="seg" style="width:' + wB + '%; background:' + colorB + ';"></div>' +
+        '</div>' +
+        '<p class="cat-note">' + c.note + '</p>';
+      els.catSection.appendChild(row);
+    });
+
+    els.compGrid.innerHTML = '';
+    [{ name: nameA, met: metA, color: colorA }, { name: nameB, met: metB, color: colorB }].forEach(function (d) {
+      var panel = document.createElement('div');
+      panel.className = 'comp-panel';
+      panel.style.setProperty('--deck-color', d.color);
+      var typeLabel = d.met.dominantType ? (d.met.dominantType.charAt(0).toUpperCase() + d.met.dominantType.slice(1)) : 'Mixed';
+      var isLeader = margin >= 4 && d.name === leader.name;
+      panel.innerHTML =
+        '<p class="comp-title">' + d.name + (isLeader ? '<span class="favored-badge" style="--deck-color:' + d.color + '">Favored</span>' : '') + '</p>' +
+        '<div class="comp-counts">' +
+          '<span><b>' + d.met.pokemonCount + '</b> Pok\u00e9mon</span>' +
+          '<span><b>' + d.met.trainerCount + '</b> Trainer</span>' +
+          '<span><b>' + d.met.energyCount + '</b> Energy</span>' +
+          '<span><b>' + typeLabel + '</b> lean</span>' +
+        '</div>';
+      renderChips(panel, d.met.chips);
+
+      var suggestions = generateSuggestions(d.met);
+      var sBlock = document.createElement('div');
+      sBlock.className = 'suggest-block';
+      if (suggestions.length) {
+        var heading = document.createElement('p');
+        heading.className = 'suggest-heading';
+        heading.textContent = 'Suggested additions';
+        sBlock.appendChild(heading);
+        suggestions.forEach(function (s, i) {
+          var item = document.createElement('div');
+          item.className = 'suggest-item';
+          item.style.animationDelay = (i * 60) + 'ms';
+          item.innerHTML = '<p class="suggest-item-title">' + s.title + '</p><p class="suggest-item-detail">' + s.detail + '</p>';
+          sBlock.appendChild(item);
+        });
+      } else {
+        sBlock.innerHTML = '<p class="suggest-heading">Suggested additions</p><p class="suggest-empty">No obvious structural gaps found \u2014 the engine looks solid on paper.</p>';
+      }
+      panel.appendChild(sBlock);
+
+      els.compGrid.appendChild(panel);
+    });
+
+    els.results.classList.add('visible');
+    els.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  els.forecastBtn.addEventListener('click', runForecast);
+
+  els.clearBtn.addEventListener('click', function () {
+    els.listA.value = ''; els.listB.value = '';
+    els.nameA.value = ''; els.nameB.value = '';
+    els.errorLine.textContent = '';
+    els.results.classList.remove('visible');
+    updateCount('listA', 'countA');
+    updateCount('listB', 'countB');
+  });
+
+  var EXAMPLE_A = "Pok\u00e9mon: 14\n4 Dreepy\n2 Drakloak\n3 Dragapult ex\n3 Duskull\n1 Dusclops\n1 Dusknoir\n\nTrainer: 30\n3 Lillie's Determination\n2 Briar\n2 Boss's Orders\n4 Ultra Ball\n3 Buddy-Buddy Poffin\n2 Dusk Ball\n2 Switch\n2 Float Stone\n2 Choice Belt\n2 Super Rod\n2 Area Zero Underdepths\n2 Rescue Board\n2 Trekking Shoes\n\nEnergy: 16\n16 Psychic Energy\n\nTotal Cards: 60";
+
+  var EXAMPLE_B = "Pok\u00e9mon: 15\n4 Mega Kangaskhan ex\n4 Meowth ex\n4 Lillie's Clefairy ex\n3 Latias ex\n\nTrainer: 29\n4 Dusk Ball\n2 Area Zero Underdepths\n2 Wondrous Patch\n2 Lillie's Pearl\n4 Ultra Ball\n3 Lillie's Determination\n2 Briar\n2 Boss's Orders\n2 Switch\n2 Super Rod\n2 Buddy-Buddy Poffin\n2 Rescue Board\n\nEnergy: 16\n16 Psychic Energy\n\nTotal Cards: 60";
+
+  els.exampleBtn.addEventListener('click', function () {
+    els.nameA.value = 'Dragapult / Dusknoir';
+    els.nameB.value = "Lillie's Clefairy ex";
+    els.listA.value = EXAMPLE_A;
+    els.listB.value = EXAMPLE_B;
+    updateCount('listA', 'countA');
+    updateCount('listB', 'countB');
+    els.errorLine.textContent = '';
+  });
+
+  updateCount('listA', 'countA');
+  updateCount('listB', 'countB');
+})();
+</script>
+</body>
+</html>
