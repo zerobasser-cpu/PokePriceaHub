@@ -125,6 +125,10 @@ export default async function HomePage() {
               Rarities
             </Link>
 
+            <Link href="/games/whos-that-pokemon">
+              🎮 Who's That Pokémon?
+            </Link>
+
             <a href="/deck-matchup-forecast.html">
               Deck Tester
             </a>
@@ -164,8 +168,8 @@ export default async function HomePage() {
             Search thousands of Pokémon TCG
             cards, explore sets, rarities and
             card prices and if your a player
-	    try our deck tester out to forcast
-	    different decks outcomes!
+            try our deck tester out to forecast
+            different decks outcomes!
           </p>
 
 
@@ -461,6 +465,36 @@ export default async function HomePage() {
 
             <small>
               Find rare and valuable cards
+            </small>
+
+          </span>
+
+
+          <span className="quick-link-arrow">
+            →
+          </span>
+
+        </Link>
+
+
+        <Link
+          href="/games/whos-that-pokemon"
+          className="quick-link"
+        >
+
+          <span className="quick-link-icon">
+            🎮
+          </span>
+
+
+          <span>
+
+            <strong>
+              Who's That Pokémon?
+            </strong>
+
+            <small>
+              Test your Pokémon knowledge
             </small>
 
           </span>
