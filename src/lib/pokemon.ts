@@ -208,57 +208,10 @@ const CACHE_TTL = {
 };
 
 
-/* ============================================================
-   HELPERS
-============================================================ */
-
-function cleanString(
-  value: unknown,
-): string {
-  return String(
-    value ?? "",
-  ).trim();
-}
-
-
-function clampPage(
-  value: unknown,
-): number {
-  const page = Number(value);
-
-  if (
-    !Number.isFinite(page) ||
-    page < 1
-  ) {
-    return 1;
-  }
-
-  return Math.floor(page);
-}
-
-
-function clampPageSize(
-  value: unknown,
-): number {
-  const pageSize = Number(value);
-
-  if (
-    !Number.isFinite(pageSize) ||
-    pageSize < 1
-  ) {
-    return DEFAULT_PAGE_SIZE;
-  }
-
-  return Math.min(
-    Math.floor(pageSize),
-    MAX_PAGE_SIZE,
-  );
-}
-
-
 function getCached<T>(
   key: string,
 ): T | null {
+
   const entry =
     CACHE.get(key);
 
@@ -283,6 +236,7 @@ function setCached<T>(
   value: T,
   ttl: number,
 ): void {
+
   CACHE.set(
     key,
     {
@@ -295,6 +249,59 @@ function setCached<T>(
 
 
 /* ============================================================
+   HELPERS
+============================================================ */
+
+function cleanString(
+  value: unknown,
+): string {
+
+  return String(
+    value ?? "",
+  ).trim();
+}
+
+
+function clampPage(
+  value: unknown,
+): number {
+
+  const page =
+    Number(value);
+
+  if (
+    !Number.isFinite(page) ||
+    page < 1
+  ) {
+    return 1;
+  }
+
+  return Math.floor(page);
+}
+
+
+function clampPageSize(
+  value: unknown,
+): number {
+
+  const pageSize =
+    Number(value);
+
+  if (
+    !Number.isFinite(pageSize) ||
+    pageSize < 1
+  ) {
+    return DEFAULT_PAGE_SIZE;
+  }
+
+  return Math.min(
+    Math.floor(pageSize),
+    MAX_PAGE_SIZE,
+  );
+}
+
+
+/* ============================================================
    PRICING JSON PARSER
 ============================================================ */
 
@@ -302,34 +309,23 @@ function setCached<T>(
  * SQLite stores the TCGplayer and Cardmarket columns as
  * JSON text.
  *
- * Example:
- *
- * {
- *   "url": "...",
- *   "prices": {
- *     "holofoil": {
- *       "market": 897.19
- *     }
- *   }
- * }
- *
- * When the database row is loaded, those fields may therefore
- * be strings rather than JavaScript objects.
- *
- * TypeScript casts do NOT parse JSON.
- *
- * This helper safely handles both:
+ * This helper safely handles:
  *
  * - already-parsed objects
  * - JSON strings
  *
- * Invalid or empty pricing data is treated as undefined so
- * one bad card cannot break the website.
+ * The generic type is important here.
+ *
+ * TCGplayer and Cardmarket have different pricing structures,
+ * so returning a union of both types causes TypeScript to reject
+ * the value when assigning it to a specific property.
+ *
+ * Instead, the caller specifies the expected pricing type.
  */
 
-function parsePricingObject(
+function parsePricingObject<T>(
   value: unknown,
-): Card["tcgplayer"] | Card["cardmarket"] | undefined {
+): T | undefined {
 
   if (!value) {
     return undefined;
@@ -342,9 +338,7 @@ function parsePricingObject(
     typeof value === "object" &&
     value !== null
   ) {
-    return value as
-      | Card["tcgplayer"]
-      | Card["cardmarket"];
+    return value as T;
   }
 
   /*
@@ -370,17 +364,15 @@ function parsePricingObject(
         parsed &&
         typeof parsed === "object"
       ) {
-        return parsed as
-          | Card["tcgplayer"]
-          | Card["cardmarket"];
+        return parsed as T;
       }
 
     } catch {
       /*
        * Invalid JSON is treated as missing pricing.
        *
-       * This deliberately does not throw because pricing
-       * problems should never prevent a card from loading.
+       * Pricing problems should never prevent a card
+       * from loading.
        */
     }
   }
@@ -396,6 +388,7 @@ function parsePricingObject(
 function safeImage(
   image: unknown,
 ): string {
+
   if (
     typeof image !== "string"
   ) {
@@ -415,6 +408,7 @@ function safeImage(
 function safeOptionalImage(
   image: unknown,
 ): string | undefined {
+
   if (
     typeof image !== "string"
   ) {
@@ -436,24 +430,26 @@ function normaliseCard(
   raw: DatabaseCard,
 ): Card {
 
-  const images = (raw.images || {}) as {
-    small?: string;
-    large?: string;
-  };
-
-  const set = (raw.set || {}) as {
-    id?: string;
-    name?: string;
-    series?: string;
-    printedTotal?: number;
-    total?: number;
-    releaseDate?: string;
-    updatedAt?: string;
-    images?: {
-      symbol?: string;
-      logo?: string;
+  const images =
+    (raw.images || {}) as {
+      small?: string;
+      large?: string;
     };
-  };
+
+  const set =
+    (raw.set || {}) as {
+      id?: string;
+      name?: string;
+      series?: string;
+      printedTotal?: number;
+      total?: number;
+      releaseDate?: string;
+      updatedAt?: string;
+      images?: {
+        symbol?: string;
+        logo?: string;
+      };
+    };
 
   return {
     ...raw,
@@ -625,18 +621,39 @@ function normaliseCard(
      * IMPORTANT:
      *
      * The database stores these as JSON strings.
-     * Parse them before calculatePrices() receives
-     * the card.
+     *
+     * Parse TCGplayer and Cardmarket independently so
+     * TypeScript knows each property has its correct type.
      */
     tcgplayer:
-      parsePricingObject(
+      parsePricingObject<TCGPlayerPrices>(
         raw.tcgplayer,
-      ),
+      )
+        ? {
+            ...(parsePricingObject<{
+              url?: string;
+              updatedAt?: string;
+              prices?: TCGPlayerPrices;
+            }>(
+              raw.tcgplayer,
+            ) || {}),
+          }
+        : undefined,
 
     cardmarket:
-      parsePricingObject(
+      parsePricingObject<CardmarketPrices>(
         raw.cardmarket,
-      ),
+      )
+        ? {
+            ...(parsePricingObject<{
+              url?: string;
+              updatedAt?: string;
+              prices?: CardmarketPrices;
+            }>(
+              raw.cardmarket,
+            ) || {}),
+          }
+        : undefined,
   };
 }
 
@@ -1489,6 +1506,7 @@ export async function getRarestCards(
       getRarestDatabaseCards(
         safeLimit,
       );
+
 
     const results =
       rows.map(
